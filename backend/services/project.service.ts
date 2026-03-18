@@ -32,7 +32,7 @@ export const projectService = {
       conditions.push(eq(projects.category, filters.category));
     }
     if (filters?.tokenType) {
-      conditions.push(eq(projects.tokenType, filters.tokenType as "STX" | "sBTC"));
+      conditions.push(eq(projects.tokenType, filters.tokenType as "STX" | "sBTC" | "USDCx"));
     }
     if (filters?.status) {
       conditions.push(eq(projects.status, filters.status as any));

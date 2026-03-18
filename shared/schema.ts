@@ -15,7 +15,7 @@ import { z } from "zod";
 
 // Enum value constants (reusable, type-safe)
 export const USER_ROLES = ["client", "freelancer"] as const;
-export const TOKEN_TYPES = ["STX", "sBTC"] as const;
+export const TOKEN_TYPES = ["STX", "sBTC", "USDCx"] as const;
 export const PROJECT_STATUSES = [
   "open",
   "active",
@@ -124,6 +124,7 @@ export const projects = mysqlTable("projects", {
   milestone4Title: varchar("milestone_4_title", { length: 200 }),
   milestone4Description: text("milestone_4_description"),
   milestone4Amount: decimal("milestone_4_amount", { precision: 18, scale: 8 }).default("0"),
+  daoCut: decimal("dao_cut", { precision: 18, scale: 8 }).default("0").notNull(),
   status: mysqlEnum("status", [...PROJECT_STATUSES]).default("open").notNull(),
   freelancerId: bigint("freelancer_id", { mode: "number", unsigned: true }).references(() => users.id),
   onChainId: int("on_chain_id"),
@@ -387,7 +388,7 @@ export const insertProjectSchema = createInsertSchema(projects, {
   description: z.string().min(1),
   category: z.string().min(1).max(100),
   subcategory: z.string().max(100).optional(),
-  tokenType: z.enum([...TOKEN_TYPES]),
+  tokenType: z.enum(["STX", "sBTC", "USDCx"]),
   numMilestones: z.number().int().min(1).max(4),
   milestone1Title: z.string().min(1).max(200),
   milestone1Amount: z.string(),
@@ -397,7 +398,7 @@ export const insertProjectSchema = createInsertSchema(projects, {
   milestone3Amount: z.string().optional(),
   milestone4Title: z.string().max(200).optional(),
   milestone4Amount: z.string().optional(),
-}).omit({ id: true, createdAt: true, updatedAt: true, status: true, freelancerId: true, onChainId: true, escrowTxId: true });
+}).omit({ id: true, createdAt: true, updatedAt: true, daoCut: true, status: true, freelancerId: true, onChainId: true, escrowTxId: true });
 
 export const selectProjectSchema = createSelectSchema(projects);
 

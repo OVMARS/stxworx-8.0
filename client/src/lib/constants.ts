@@ -1,13 +1,21 @@
-export const CONTRACT_ADDRESS = 'STVNRH0FC9XJP8J18C92J09MNBS2BS2TW6RCAQ87';
-export const CONTRACT_NAME = 'escrow-contract-v1';
+export const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || 'SP0000000000000000000000000000000000000000';
+export const CONTRACT_NAME = import.meta.env.VITE_ESCROW_CONTRACT_NAME || 'escrow-multi-token-v7';
+export const VERIFY_SOULBOUND_CONTRACT_NAME = import.meta.env.VITE_VERIFY_SOULBOUND_CONTRACT_NAME || 'verify-soulbound';
+export const REPUTATION_CONTRACT_NAME = import.meta.env.VITE_REPUTATION_CONTRACT_NAME || 'rep-sft';
 
-export const SBTC_CONTRACT_ADDRESS = 'STVNRH0FC9XJP8J18C92J09MNBS2BS2TW6RCAQ87';
-export const SBTC_CONTRACT_NAME = 'sbtc-token';
-export const SBTC_ASSET_NAME = 'sbtc-token';
+export const SBTC_CONTRACT_ADDRESS = import.meta.env.VITE_SBTC_CONTRACT_ADDRESS || CONTRACT_ADDRESS;
+export const SBTC_CONTRACT_NAME = import.meta.env.VITE_SBTC_CONTRACT_NAME || 'sbtc-token';
+export const SBTC_ASSET_NAME = import.meta.env.VITE_SBTC_ASSET_NAME || SBTC_CONTRACT_NAME;
+
+export const USDCX_CONTRACT_ADDRESS = import.meta.env.VITE_USDCX_CONTRACT_ADDRESS || CONTRACT_ADDRESS;
+export const USDCX_CONTRACT_NAME = import.meta.env.VITE_USDCX_CONTRACT_NAME || 'usdcx-token';
+export const USDCX_ASSET_NAME = import.meta.env.VITE_USDCX_ASSET_NAME || USDCX_CONTRACT_NAME;
+
+export const HIRO_API_BASE_URL = import.meta.env.VITE_HIRO_API_BASE_URL || 'https://api.hiro.so';
 
 export const APP_CONFIG = {
   name: 'STXWorx Freelance',
   icon: '/vite.svg',
 };
 
-export const IS_TESTNET = true;
+export const IS_TESTNET = false;

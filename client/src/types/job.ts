@@ -15,7 +15,7 @@ export interface ApiProject {
   description: string;
   category: string;
   subcategory?: string | null;
-  tokenType: string;
+  tokenType: 'STX' | 'sBTC' | 'USDCx';
   numMilestones?: number;
   milestone1Title?: string | null;
   milestone1Description?: string | null;
@@ -29,6 +29,9 @@ export interface ApiProject {
   milestone4Title?: string | null;
   milestone4Description?: string | null;
   milestone4Amount?: string | number | null;
+  daoCut?: string | number | null;
+  onChainId?: number | null;
+  escrowTxId?: string | null;
   status: string;
   budget?: string | number;
   createdAt?: string;

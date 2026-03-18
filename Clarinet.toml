@@ -9,18 +9,23 @@ boot_contracts = []
 
 [contracts.escrow-multi-token-v7]
 path = "contracts/escrow-multi-token-v7.clar"
-clarity_version = 2
-epoch = "2.4"
+clarity_version = 4
+epoch = "latest"
+
+[contracts.stxworks-escrow-v8]
+path = "contracts/stxworks-escrow-v8.clar"
+clarity_version = 4
+epoch = "latest"
 
 [contracts.verify-soulbound]
 path = "contracts/verify-soulbound.clar"
-clarity_version = 2
-epoch = "2.4"
+clarity_version = 4
+epoch = "latest"
 
 [contracts.rep-sft]
 path = "contracts/rep-sft.clar"
-clarity_version = 2
-epoch = "2.4"
+clarity_version = 4
+epoch = "latest"
 
 [repl.analysis]
 passes = ["check_checker"]

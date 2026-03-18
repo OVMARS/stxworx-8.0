@@ -69,7 +69,7 @@ export interface CreateProjectInput {
   description: string;
   category: string;
   subcategory?: string;
-  tokenType: 'STX' | 'sBTC';
+  tokenType: 'STX' | 'sBTC' | 'USDCx';
   numMilestones: number;
   milestone1Title: string;
   milestone1Description?: string;
