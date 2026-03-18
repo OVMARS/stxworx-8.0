@@ -1,0 +1,14 @@
+services:
+  mysql:
+    image: mysql:8
+    container_name: stx-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: stx_freelance
+    ports:
+      - "3306:3306"
+    volumes:
+      - stx_mysql_data:/var/lib/mysql
+
+volumes:
+  stx_mysql_data:

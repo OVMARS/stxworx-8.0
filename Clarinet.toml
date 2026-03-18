@@ -1,0 +1,32 @@
+[project]
+name = "stx-freelance-platform"
+description = "Decentralized freelance platform on Stacks blockchain"
+authors = []
+telemetry = false
+cache_dir = "./.cache"
+requirements = []
+boot_contracts = []
+
+[contracts.escrow-multi-token-v7]
+path = "contracts/escrow-multi-token-v7.clar"
+clarity_version = 2
+epoch = "2.4"
+
+[contracts.verify-soulbound]
+path = "contracts/verify-soulbound.clar"
+clarity_version = 2
+epoch = "2.4"
+
+[contracts.rep-sft]
+path = "contracts/rep-sft.clar"
+clarity_version = 2
+epoch = "2.4"
+
+[repl.analysis]
+passes = ["check_checker"]
+
+[repl.analysis.check_checker]
+strict = false
+trusted_sender = false
+trusted_caller = false
+callee_filter = false

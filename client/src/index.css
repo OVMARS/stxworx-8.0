@@ -1,0 +1,173 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Clash Display';
+  src: url('/fonts/ClashDisplay-Variable.woff2') format('woff2'),
+       url('/fonts/ClashDisplay-Variable.woff') format('woff'),
+       url('/fonts/ClashDisplay-Variable.ttf') format('truetype');
+  font-weight: 200 700;
+  font-display: swap;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Clash Grotesk';
+  src: url('/fonts/ClashGrotesk-Variable.woff2') format('woff2'),
+       url('/fonts/ClashGrotesk-Variable.woff') format('woff'),
+       url('/fonts/ClashGrotesk-Variable.ttf') format('truetype');
+  font-weight: 200 700;
+  font-display: swap;
+  font-style: normal;
+}
+
+@theme {
+  --font-sans: "Clash Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Clash Display", sans-serif;
+  
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  
+  --color-accent-orange: #FF5E00;
+  --color-accent-cyan: #00F0FF;
+  --color-accent-lightblue: #00BFFF;
+  --color-accent-blue: #1A44FF;
+  --color-accent-red: #FF1A44;
+  --color-accent-yellow: #FFCC00;
+
+  /* Compatibility with existing classes */
+  --color-accent-pink: #FF1A44;
+  --color-accent-purple: #1A44FF;
+  --color-accent-green: #00F0FF;
+}
+
+:root {
+  --bg: #0A0A0A;
+  --surface: #151515;
+  --surface-hover: #1C1C1C;
+  --ink: #FFFFFF;
+  --muted: rgba(255, 255, 255, 0.5);
+  --border: rgba(255, 255, 255, 0.08);
+  --shadow-3d: rgba(0, 0, 0, 0.8);
+}
+
+[data-theme='light'] {
+  --bg: #F5F5F5;
+  --surface: #FFFFFF;
+  --surface-hover: #EBEBEB;
+  --ink: #0A0A0A;
+  --muted: rgba(0, 0, 0, 0.5);
+  --border: rgba(0, 0, 0, 0.08);
+  --shadow-3d: rgba(0, 0, 0, 0.15);
+  --color-accent-cyan: #000000;
+  --color-accent-lightblue: #000000;
+  --color-accent-blue: #000000;
+  --color-accent-yellow: #000000;
+  --color-accent-pink: #000000;
+  --color-accent-purple: #000000;
+  --color-accent-green: #000000;
+}
+
+@layer base {
+  body {
+    @apply bg-bg text-ink font-sans antialiased selection:bg-accent-orange selection:text-bg;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight text-ink;
+  }
+}
+
+@layer components {
+  .container-custom {
+    @apply max-w-[1400px] mx-auto px-6 lg:px-10;
+  }
+
+  .nav-link {
+    @apply text-sm font-medium text-muted hover:text-ink transition-colors duration-300;
+  }
+
+  .btn-primary {
+    @apply bg-accent-orange text-bg px-6 py-3 rounded-[25px] text-sm font-bold hover:bg-ink hover:text-bg transition-all duration-300 flex items-center gap-2 relative overflow-hidden;
+    --btn-shadow-color: #CC5500; /* Darker orange */
+    box-shadow: 0 4px 0 var(--btn-shadow-color);
+    background-image: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(0,0,0,0.1) 100%);
+  }
+
+  .btn-primary:active {
+    box-shadow: 0 0px 0 var(--btn-shadow-color);
+    transform: translateY(4px);
+  }
+
+  .btn-primary::after {
+    content: '';
+    @apply absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full transition-transform duration-500 ease-in-out pointer-events-none;
+  }
+
+  .btn-primary:hover::after {
+    @apply translate-x-full;
+  }
+
+  .btn-outline {
+    @apply border border-border px-6 py-3 rounded-[25px] text-sm font-bold hover:bg-ink hover:text-bg transition-all duration-300 flex items-center gap-2 relative overflow-hidden;
+    --btn-shadow-color: var(--border);
+    box-shadow: 0 4px 0 var(--btn-shadow-color);
+  }
+
+  .btn-outline:active {
+    box-shadow: 0 0px 0 var(--btn-shadow-color);
+    transform: translateY(4px);
+  }
+
+  .btn-outline::after {
+    content: '';
+    @apply absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full transition-transform duration-500 ease-in-out pointer-events-none;
+  }
+
+  .btn-outline:hover::after {
+    @apply translate-x-full;
+  }
+
+  .btn-outline:hover {
+    background-image: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(0,0,0,0.1) 100%);
+  }
+
+  .card {
+    @apply bg-surface border border-border rounded-[25px] p-6 transition-all duration-300 hover:border-ink/20;
+  }
+
+  .section-label {
+    @apply text-xs font-bold uppercase tracking-widest text-accent-orange mb-4 block;
+  }
+
+  .glass {
+    @apply bg-ink/5 backdrop-blur-xl border border-ink/10;
+  }
+}
+
+/* Hide scrollbar but keep functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Custom Cursor - Minimal */
+.custom-cursor {
+  @apply fixed w-2 h-2 bg-accent-orange rounded-full pointer-events-none z-[9999] transition-transform duration-100 ease-out;
+}
+
+.custom-cursor-follower {
+  @apply fixed w-8 h-8 border border-accent-orange/30 rounded-full pointer-events-none z-[9998] transition-all duration-300 ease-out;
+}
+
+@layer utilities {
+  .bg-accent-orange, .bg-accent-cyan, .bg-accent-lightblue, .bg-accent-blue, .bg-accent-red, .bg-accent-yellow, .bg-accent-pink, .bg-accent-purple, .bg-accent-green {
+    background-image: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(0,0,0,0.1) 100%);
+  }
+}

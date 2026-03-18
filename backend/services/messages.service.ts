@@ -1,0 +1,215 @@
+import { db } from "../db";
+import { conversationParticipants, conversations, messages, userSettings, users } from "@shared/schema";
+import { and, desc, eq, gt, ne } from "drizzle-orm";
+import { connectionsService } from "./connections.service";
+
+async function getUser(userId: number) {
+  const [user] = await db.select().from(users).where(eq(users.id, userId));
+  return user || null;
+}
+
+export const messagesService = {
+  async assertConversationAccess(conversationId: number, userId: number) {
+    const [participant] = await db
+      .select()
+      .from(conversationParticipants)
+      .where(and(eq(conversationParticipants.conversationId, conversationId), eq(conversationParticipants.userId, userId)));
+
+    if (!participant) {
+      throw new Error("Conversation not found");
+    }
+
+    return participant;
+  },
+
+  async assertCanMessage(senderId: number, recipientId: number) {
+    const sender = await getUser(senderId);
+    const recipient = await getUser(recipientId);
+
+    if (!sender || !recipient || !recipient.isActive) {
+      throw new Error("Recipient not available");
+    }
+
+    const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, recipientId));
+    const messagingOption = settings?.messagingOption ?? "everyone";
+
+    if (messagingOption === "clients_only" && sender.role !== "client") {
+      throw new Error("This user only accepts messages from clients");
+    }
+
+    if (messagingOption === "connections_only" && !(await connectionsService.areConnected(senderId, recipientId))) {
+      throw new Error("This user only accepts messages from connections");
+    }
+  },
+
+  async getOrCreateDirectConversation(userId: number, otherUserId: number) {
+    const mine = await db
+      .select({ conversationId: conversationParticipants.conversationId })
+      .from(conversationParticipants)
+      .where(eq(conversationParticipants.userId, userId));
+
+    for (const row of mine) {
+      const participants = await db
+        .select()
+        .from(conversationParticipants)
+        .where(eq(conversationParticipants.conversationId, row.conversationId));
+
+      if (participants.length === 2 && participants.some((participant) => participant.userId === otherUserId)) {
+        const [existing] = await db.select().from(conversations).where(eq(conversations.id, row.conversationId));
+        return existing || null;
+      }
+    }
+
+    const [result] = await db.insert(conversations).values({});
+    await db.insert(conversationParticipants).values([
+      { conversationId: result.insertId, userId, lastReadAt: new Date() },
+      { conversationId: result.insertId, userId: otherUserId },
+    ]);
+    const [created] = await db.select().from(conversations).where(eq(conversations.id, result.insertId));
+    return created || null;
+  },
+
+  async listForUser(userId: number) {
+    const memberships = await db
+      .select()
+      .from(conversationParticipants)
+      .where(eq(conversationParticipants.userId, userId));
+
+    const conversationsWithMeta = await Promise.all(
+      memberships.map(async (membership) => {
+        const [otherParticipant] = await db
+          .select()
+          .from(conversationParticipants)
+          .where(
+            and(
+              eq(conversationParticipants.conversationId, membership.conversationId),
+              ne(conversationParticipants.userId, userId),
+            ),
+          );
+
+        if (!otherParticipant) {
+          return null;
+        }
+
+        const [participantUser] = await db
+          .select({
+            id: users.id,
+            stxAddress: users.stxAddress,
+            username: users.username,
+            role: users.role,
+            avatar: users.avatar,
+          })
+          .from(users)
+          .where(eq(users.id, otherParticipant.userId));
+
+        const [lastMessage] = await db
+          .select()
+          .from(messages)
+          .where(eq(messages.conversationId, membership.conversationId))
+          .orderBy(desc(messages.createdAt));
+
+        const unreadMessages = membership.lastReadAt
+          ? await db
+              .select()
+              .from(messages)
+              .where(
+                and(
+                  eq(messages.conversationId, membership.conversationId),
+                  ne(messages.senderId, userId),
+                  gt(messages.createdAt, membership.lastReadAt),
+                ),
+              )
+          : await db
+              .select()
+              .from(messages)
+              .where(and(eq(messages.conversationId, membership.conversationId), ne(messages.senderId, userId)));
+
+        return {
+          id: membership.conversationId,
+          participant: participantUser,
+          lastMessage: lastMessage?.body ?? "",
+          lastMessageAt: lastMessage?.createdAt ?? membership.createdAt,
+          unreadCount: unreadMessages.length,
+        };
+      }),
+    );
+
+    return conversationsWithMeta
+      .filter(Boolean)
+      .sort((left, right) => new Date(right!.lastMessageAt).getTime() - new Date(left!.lastMessageAt).getTime());
+  },
+
+  async getMessages(conversationId: number, userId: number) {
+    await this.assertConversationAccess(conversationId, userId);
+
+    const rows = await db
+      .select({
+        id: messages.id,
+        conversationId: messages.conversationId,
+        senderId: messages.senderId,
+        body: messages.body,
+        createdAt: messages.createdAt,
+        senderAddress: users.stxAddress,
+        senderUsername: users.username,
+        senderRole: users.role,
+      })
+      .from(messages)
+      .leftJoin(users, eq(messages.senderId, users.id))
+      .where(eq(messages.conversationId, conversationId));
+
+    await db
+      .update(conversationParticipants)
+      .set({ lastReadAt: new Date() })
+      .where(and(eq(conversationParticipants.conversationId, conversationId), eq(conversationParticipants.userId, userId)));
+
+    return rows;
+  },
+
+  async startConversation(userId: number, otherUserId: number, initialMessage?: string) {
+    await this.assertCanMessage(userId, otherUserId);
+    const conversation = await this.getOrCreateDirectConversation(userId, otherUserId);
+
+    if (initialMessage?.trim() && conversation) {
+      await this.sendMessage(conversation.id, userId, initialMessage);
+    }
+
+    return conversation;
+  },
+
+  async sendMessage(conversationId: number, userId: number, body: string) {
+    await this.assertConversationAccess(conversationId, userId);
+
+    const [result] = await db.insert(messages).values({
+      conversationId,
+      senderId: userId,
+      body,
+    });
+
+    await db
+      .update(conversations)
+      .set({ updatedAt: new Date() })
+      .where(eq(conversations.id, conversationId));
+
+    await db
+      .update(conversationParticipants)
+      .set({ lastReadAt: new Date() })
+      .where(and(eq(conversationParticipants.conversationId, conversationId), eq(conversationParticipants.userId, userId)));
+
+    const [created] = await db
+      .select({
+        id: messages.id,
+        conversationId: messages.conversationId,
+        senderId: messages.senderId,
+        body: messages.body,
+        createdAt: messages.createdAt,
+        senderAddress: users.stxAddress,
+        senderUsername: users.username,
+        senderRole: users.role,
+      })
+      .from(messages)
+      .leftJoin(users, eq(messages.senderId, users.id))
+      .where(eq(messages.id, result.insertId));
+
+    return created || null;
+  },
+};

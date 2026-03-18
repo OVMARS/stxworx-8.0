@@ -1,0 +1,25 @@
+---
+id: 0
+name: Testnet deployment
+network: testnet
+stacks-node: "https://api.testnet.hiro.so"
+bitcoin-node: "http://blockstack:blockstacksystem@bitcoind.testnet.stacks.co:18332"
+plan:
+  batches:
+    - id: 0
+      transactions:
+        - contract-publish:
+            contract-name: escrow-multi-token-v7
+            expected-sender: STVNRH0FC9XJP8J18C92J09MNBS2BS2TW6RCAQ87
+            cost: 407450
+            path: contracts/escrow-multi-token-v7.clar
+            anchor-block-only: true
+            clarity-version: 4
+        - contract-publish:
+            contract-name: rep-sft
+            expected-sender: STVNRH0FC9XJP8J18C92J09MNBS2BS2TW6RCAQ87
+            cost: 130230
+            path: contracts/rep-sft.clar
+            anchor-block-only: true
+            clarity-version: 4
+      epoch: "3.3"
