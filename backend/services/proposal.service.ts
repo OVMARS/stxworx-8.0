@@ -82,10 +82,14 @@ export const proposalService = {
         )
       );
 
-    // Assign freelancer to the project
+    // Assign freelancer to the project and set status to active
     await db
       .update(projects)
-      .set({ freelancerId: proposal.freelancerId, updatedAt: new Date() })
+      .set({ 
+        freelancerId: proposal.freelancerId, 
+        status: "active",
+        updatedAt: new Date() 
+      })
       .where(eq(projects.id, proposal.projectId));
 
     return accepted;

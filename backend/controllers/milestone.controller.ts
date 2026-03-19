@@ -51,6 +51,57 @@ export const milestoneController = {
         return res.status(400).json({ message: "Project is not active" });
       }
 
+      // Check if there's an existing submission for this milestone
+      const [existing] = await db
+        .select()
+        .from(milestoneSubmissions)
+        .where(
+          and(
+            eq(milestoneSubmissions.projectId, projectId),
+            eq(milestoneSubmissions.milestoneNum, milestoneNum),
+            eq(milestoneSubmissions.freelancerId, req.user!.id)
+          )
+        );
+
+      if (existing) {
+        // Only allow resubmission if the previous submission was rejected
+        if (existing.status !== "rejected") {
+          return res.status(400).json({ message: "This milestone has already been submitted and is not eligible for resubmission" });
+        }
+        
+        // Update the existing rejected submission
+        await db
+          .update(milestoneSubmissions)
+          .set({
+            deliverableUrl,
+            description,
+            completionTxId,
+            status: "submitted",
+            submittedAt: new Date(),
+            reviewedAt: null,
+            releaseTxId: null,
+          })
+          .where(eq(milestoneSubmissions.id, existing.id));
+        
+        const [submission] = await db.select().from(milestoneSubmissions).where(eq(milestoneSubmissions.id, existing.id));
+
+        // Notify the client about the resubmission
+        try {
+          await notificationService.create({
+            userId: project.clientId,
+            type: "milestone_submitted",
+            title: `Milestone ${milestoneNum} Resubmitted`,
+            message: `Your freelancer has resubmitted deliverables for Milestone ${milestoneNum} on "${project.title}". Please review and approve or reject.`,
+            projectId: project.id,
+          });
+        } catch (e) {
+          console.error("Failed to create submission notification:", e);
+        }
+
+        return res.status(200).json(submission);
+      }
+
+      // Create new submission if none exists
       const insertResult = await db
         .insert(milestoneSubmissions)
         .values({
@@ -142,24 +193,7 @@ export const milestoneController = {
         }
       }
 
-      // Update freelancer earnings — add this milestone's amount
-      if (submission.freelancerId) {
-        try {
-          const milestoneAmount = getMilestoneAmount(project, submission.milestoneNum);
-          if (milestoneAmount > 0) {
-            await db
-              .update(users)
-              .set({
-                totalEarned: sql`${users.totalEarned} + ${String(milestoneAmount)}`,
-                updatedAt: new Date(),
-              })
-              .where(eq(users.id, submission.freelancerId));
-          }
-        } catch (e) {
-          console.error("Failed to update freelancer earnings:", e);
-        }
-      }
-
+      
       // Notify the freelancer that their milestone was approved
       try {
         if (submission.freelancerId) {

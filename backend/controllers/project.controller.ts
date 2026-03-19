@@ -142,7 +142,8 @@ export const projectController = {
         ...p,
         budget: projectService.computeBudget(p),
       }));
-      return res.status(200).json(withBudget);
+      const enriched = await projectController._enrichWithAddresses(withBudget);
+      return res.status(200).json(enriched);
     } catch (error) {
       console.error("My posted projects error:", error);
       return res.status(500).json({ message: "Internal server error" });
@@ -157,7 +158,8 @@ export const projectController = {
         ...p,
         budget: projectService.computeBudget(p),
       }));
-      return res.status(200).json(withBudget);
+      const enriched = await projectController._enrichWithAddresses(withBudget);
+      return res.status(200).json(enriched);
     } catch (error) {
       console.error("My active projects error:", error);
       return res.status(500).json({ message: "Internal server error" });
@@ -172,7 +174,8 @@ export const projectController = {
         ...p,
         budget: projectService.computeBudget(p),
       }));
-      return res.status(200).json(withBudget);
+      const enriched = await projectController._enrichWithAddresses(withBudget);
+      return res.status(200).json(enriched);
     } catch (error) {
       console.error("My completed projects error:", error);
       return res.status(500).json({ message: "Internal server error" });

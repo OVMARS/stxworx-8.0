@@ -4,7 +4,6 @@ import { Link, useLocation } from 'react-router-dom';
 import * as Shared from '../shared';
 import {
   acceptProposal,
-  activateProject,
   formatAddress,
   formatRelativeTime,
   getMyPostedProjects,
@@ -28,8 +27,6 @@ export const ReviewProposalsPage = () => {
   const [reviewsByAddress, setReviewsByAddress] = useState<Record<string, ApiUserReview[]>>({});
   const [messageRecipientAddress, setMessageRecipientAddress] = useState('');
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  const [escrowTxId, setEscrowTxId] = useState('');
-  const [onChainId, setOnChainId] = useState('');
   const [loading, setLoading] = useState(true);
 
   const loadProposals = useCallback(async (projectIdOverride?: number) => {
@@ -38,7 +35,7 @@ export const ReviewProposalsPage = () => {
       const postedProjects = await getMyPostedProjects();
       setProjects(postedProjects);
 
-      const resolvedProjectId = projectIdOverride || selectedProjectId || postedProjects[0]?.id;
+      const resolvedProjectId = projectIdOverride || selectedProjectId || postedProjects.filter(p => p.status !== 'completed')[0]?.id;
       if (!resolvedProjectId) {
         setProject(null);
         setProposals([]);
@@ -121,23 +118,6 @@ export const ReviewProposalsPage = () => {
     }
   };
 
-  const handleActivateProject = async () => {
-    if (!project || !escrowTxId.trim() || !onChainId.trim()) {
-      return;
-    }
-
-    try {
-      await activateProject(project.id, {
-        escrowTxId: escrowTxId.trim(),
-        onChainId: Number(onChainId),
-      });
-      setEscrowTxId('');
-      setOnChainId('');
-      await loadProposals(project.id);
-    } catch (error) {
-      console.error('Failed to activate project:', error);
-    }
-  };
 
   return (
     <div className="pt-28 pb-20 px-6 md:pl-[92px]">
@@ -163,7 +143,7 @@ export const ReviewProposalsPage = () => {
               onChange={(event) => loadProposals(Number(event.target.value))}
               className="w-full bg-ink/5 border border-border rounded-[15px] px-4 py-3 text-sm outline-none"
             >
-              {projects.map((entry) => (
+              {projects.filter(p => p.status !== 'completed').map((entry) => (
                 <option key={entry.id} value={entry.id}>
                   {entry.title}
                 </option>
@@ -172,29 +152,6 @@ export const ReviewProposalsPage = () => {
           </div>
         )}
 
-        {acceptedProposal && project?.status !== 'active' && (
-          <div className="card p-6 mb-8">
-            <h3 className="font-bold text-xl mb-2">Activate Escrow</h3>
-            <p className="text-sm text-muted mb-6">A proposal has been accepted. If you already have the contract transaction details, you can activate the project now.</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              <input
-                value={escrowTxId}
-                onChange={(event) => setEscrowTxId(event.target.value)}
-                placeholder="Escrow transaction ID"
-                className="w-full bg-ink/5 border border-border rounded-[15px] px-4 py-3 text-sm outline-none"
-              />
-              <input
-                value={onChainId}
-                onChange={(event) => setOnChainId(event.target.value)}
-                placeholder="On-chain project ID"
-                className="w-full bg-ink/5 border border-border rounded-[15px] px-4 py-3 text-sm outline-none"
-              />
-            </div>
-            <button onClick={handleActivateProject} className="btn-primary py-3 px-5">
-              Activate Project
-            </button>
-          </div>
-        )}
 
         {loading ? (
           <div className="card p-6 text-sm text-muted">Loading proposals...</div>

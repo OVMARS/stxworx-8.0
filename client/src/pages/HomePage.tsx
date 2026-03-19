@@ -48,8 +48,7 @@ export const HomePage = () => {
       ? (
           topFreelancers.reduce((sum, freelancer) => sum + freelancer.avgRating, 0) / topFreelancers.length
         ).toFixed(1)
-      : '0.0';
-
+      : '4.0';
   return (
     <div className="pt-28 pb-20 px-6 md:pl-[92px]">
       <div className="container-custom">

@@ -217,6 +217,7 @@ export const NOTIFICATION_TYPES = [
   "proposal_received",
   "proposal_accepted",
   "project_completed",
+  "review_received",
 ] as const;
 
 export const notifications = mysqlTable("notifications", {

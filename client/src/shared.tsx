@@ -183,6 +183,8 @@ export const MilestoneSubmitModal = ({ isOpen, onClose, milestone, onSubmitted }
 
       if (!isOpen) return null;
 
+      const isResubmission = milestone?.status === 'rejected';
+
       const handleSubmit = async () => {
         if (!milestone?.projectId || !milestone?.milestoneNum || !deliverableUrl.trim()) {
           return;
@@ -222,7 +224,17 @@ export const MilestoneSubmitModal = ({ isOpen, onClose, milestone, onSubmitted }
                 >
                   <X size={20} />
                 </button>
-                <h3 className="text-2xl font-black mb-6">Submit Milestone Work</h3>
+                <h3 className="text-2xl font-black mb-6">
+                  {isResubmission ? 'Resubmit Milestone Work' : 'Submit Milestone Work'}
+                </h3>
+                
+                {isResubmission && (
+                  <div className="mb-6 p-4 bg-accent-orange/10 border border-accent-orange/20 rounded-[15px]">
+                    <p className="text-sm text-accent-orange">
+                      Your previous submission was rejected. Please review the feedback and submit updated work.
+                    </p>
+                  </div>
+                )}
                 
                 {milestone && (
                   <div className="mb-8 p-6 bg-ink/5 rounded-[15px] border border-border">
@@ -263,7 +275,7 @@ export const MilestoneSubmitModal = ({ isOpen, onClose, milestone, onSubmitted }
                     disabled={isSubmitting || !deliverableUrl.trim()}
                     className="w-full btn-primary py-4 font-bold text-lg justify-center"
                   >
-                    {isSubmitting ? 'Submitting...' : 'Done'}
+                    {isSubmitting ? (isResubmission ? 'Resubmitting...' : 'Submitting...') : (isResubmission ? 'Resubmit Work' : 'Submit Work')}
                   </button>
                 </div>
               </motion.div>

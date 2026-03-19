@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, Star } from 'lucide-react';
 import * as Shared from '../shared';
 import {
+  createReview,
   type ApiMilestoneSubmission,
   formatAddress,
   formatRelativeTime,
   formatTokenAmount,
   getMyActiveProjects,
   getMyCompletedProjects,
+  getMyReviews,
   getMyPostedProjects,
   getProjectMilestones,
   getProjectProposals,
@@ -64,6 +66,12 @@ export const DashboardPage = () => {
   const [milestonesByProject, setMilestonesByProject] = useState<Record<number, ApiMilestoneSubmission[]>>({});
   const [profile, setProfile] = useState<ApiUserProfile | null>(null);
   const [reviews, setReviews] = useState<ApiUserReview[]>([]);
+  const [myReviews, setMyReviews] = useState<ApiUserReview[]>([]);
+  const [ratingProjectId, setRatingProjectId] = useState<number | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const handleSubmitWork = (milestone: MilestoneView) => {
@@ -76,6 +84,20 @@ export const DashboardPage = () => {
     setIsMessageModalOpen(true);
   };
 
+  const handleOpenReview = (projectId: number) => {
+    setRatingProjectId(projectId);
+    setReviewRating(5);
+    setReviewComment('');
+    setReviewError(null);
+  };
+
+  const handleCancelReview = () => {
+    setRatingProjectId(null);
+    setReviewRating(5);
+    setReviewComment('');
+    setReviewError(null);
+  };
+
   const loadDashboardData = useCallback(async () => {
     if (!walletAddress) {
       return;
@@ -83,12 +105,13 @@ export const DashboardPage = () => {
 
     setLoading(true);
     try {
-      const [posted, active, completed, userProfile, userReviews] = await Promise.all([
+      const [posted, active, completed, userProfile, userReviews, authoredReviews] = await Promise.all([
         getMyPostedProjects(),
         getMyActiveProjects(),
         getMyCompletedProjects(),
         getUserProfile(walletAddress),
         getUserReviews(walletAddress).catch(() => []),
+        getMyReviews().catch(() => []),
       ]);
 
       setPostedProjects(posted);
@@ -96,6 +119,7 @@ export const DashboardPage = () => {
       setCompletedProjects(completed);
       setProfile(userProfile);
       setReviews(userReviews);
+      setMyReviews(authoredReviews);
 
       const [proposalEntries, milestoneEntries] = await Promise.all([
         Promise.all(
@@ -109,7 +133,7 @@ export const DashboardPage = () => {
           }),
         ),
         Promise.all(
-          active.map(async (project) => {
+          [...active, ...completed].map(async (project) => {
             try {
               const submissions = await getProjectMilestones(project.id);
               return [project.id, submissions] as const;
@@ -141,9 +165,14 @@ export const DashboardPage = () => {
     return (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1);
   }, [reviews]);
 
+  const reviewsByProjectId = useMemo(
+    () => Object.fromEntries(myReviews.map((review) => [review.projectId, review])),
+    [myReviews],
+  );
+
   const totalSpent = useMemo(
     () =>
-      [...postedProjects, ...activeProjects, ...completedProjects].reduce(
+      Array.from(new Map([...postedProjects, ...activeProjects, ...completedProjects].map((project) => [project.id, project])).values()).reduce(
         (sum, project) => sum + Number(project.budget || 0),
         0,
       ),
@@ -154,6 +183,33 @@ export const DashboardPage = () => {
     () => activeProjects.reduce((sum, project) => sum + Number(project.budget || 0), 0),
     [activeProjects],
   );
+
+  const handleSubmitReview = async (project: ApiProject) => {
+    if (!project.freelancerId || reviewSubmitting) {
+      return;
+    }
+
+    setReviewSubmitting(true);
+    setReviewError(null);
+    try {
+      const reviewData = {
+        projectId: Number(project.id),
+        rating: Number(reviewRating),
+        comment: reviewComment.trim() || undefined,
+      };
+      console.log('Submitting review:', reviewData);
+      console.log('Project:', project);
+      
+      await createReview(reviewData);
+      handleCancelReview();
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Review submission error:', error);
+      setReviewError(error instanceof Error ? error.message : 'Failed to submit review');
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
 
   if (!walletAddress) {
     return (
@@ -205,7 +261,7 @@ export const DashboardPage = () => {
                 <button onClick={() => setIsPostJobModalOpen(true)} className="btn-primary py-2 px-4 text-xs">Post New Job</button>
               </div>
               <div className="space-y-6">
-                {postedProjects.map((project) => {
+                {postedProjects.filter(p => p.status !== 'completed').map((project) => {
                   const milestones = buildMilestones(project, milestonesByProject[project.id] || []);
                   return (
                     <div key={project.id} className="border border-border rounded-[15px] p-6 bg-ink/5">
@@ -240,12 +296,121 @@ export const DashboardPage = () => {
                     </div>
                   );
                 })}
-                {postedProjects.length === 0 && <div className="text-sm text-muted">You have not posted any jobs yet.</div>}
+                {postedProjects.filter(p => p.status !== 'completed').length === 0 && <div className="text-sm text-muted">You have no active job postings.</div>}
               </div>
             </div>
 
+            {completedProjects.length > 0 && (
+              <div className="card">
+                <h3 className="font-bold text-xl mb-6">Completed Job Postings</h3>
+                <div className="space-y-6">
+                  {completedProjects.map((project) => {
+                    const milestones = buildMilestones(project, milestonesByProject[project.id] || []);
+                    const submittedReview = reviewsByProjectId[project.id];
+                    return (
+                      <div key={project.id} className="border border-border rounded-[15px] p-6 bg-ink/5">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h4 className="font-bold text-lg mb-1">{project.title}</h4>
+                            <p className="text-xs text-muted">Posted {formatRelativeTime(project.createdAt)}{project.freelancerAddress ? ` • Freelancer: ${formatAddress(project.freelancerAddress)}` : ''}</p>
+                          </div>
+                          <span className="px-3 py-1 bg-accent-cyan/10 text-accent-cyan rounded-full text-[10px] font-bold uppercase tracking-widest">{project.status}</span>
+                        </div>
+                        <div className="mb-4">
+                          <p className="text-sm text-muted mb-2">Milestones:</p>
+                          <ul className="list-disc list-inside text-sm text-muted space-y-1">
+                            {milestones.map((milestone) => (
+                              <li key={milestone.milestoneNum}>{milestone.title} ({milestone.amount})</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="flex gap-4 border-t border-border pt-4">
+                          <div className="flex-1">
+                            <p className="text-[10px] text-muted uppercase tracking-widest font-bold mb-1">Budget</p>
+                            <p className="font-bold">{formatTokenAmount(project.budget)} {project.tokenType}</p>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-[10px] text-muted uppercase tracking-widest font-bold mb-1">Freelancer</p>
+                            <p className="font-bold">{project.freelancerAddress ? formatAddress(project.freelancerAddress) : 'Unassigned'}</p>
+                          </div>
+                          <div className="flex-1 text-right">
+                            {submittedReview ? (
+                              <div className="inline-flex items-center gap-1 text-sm font-bold">
+                                <Star size={14} className="text-accent-orange fill-accent-orange" />
+                                {submittedReview.rating.toFixed(1)}
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleOpenReview(project.id)}
+                                disabled={!project.freelancerId}
+                                className="btn-primary py-2 px-4 text-xs justify-center disabled:opacity-50"
+                              >
+                                Rate Freelancer
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {submittedReview && (
+                          <div className="mt-4 border-t border-border pt-4">
+                            <p className="text-[10px] text-muted uppercase tracking-widest font-bold mb-2">Your Review</p>
+                            <p className="text-sm text-muted leading-relaxed">{submittedReview.comment || 'You left a rating without written feedback.'}</p>
+                          </div>
+                        )}
+                        {ratingProjectId === project.id && !submittedReview && (
+                          <div className="mt-4 border-t border-border pt-4">
+                            <p className="text-sm font-bold mb-3">Rate this freelancer</p>
+                            <div className="flex items-center gap-2 mb-4">
+                              {[1, 2, 3, 4, 5].map((value) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  onClick={() => setReviewRating(value)}
+                                  className="transition-transform hover:scale-105"
+                                >
+                                  <Star
+                                    size={20}
+                                    className={value <= reviewRating ? 'text-accent-orange fill-accent-orange' : 'text-muted'}
+                                  />
+                                </button>
+                              ))}
+                              <span className="text-sm font-bold ml-2">{reviewRating.toFixed(1)}</span>
+                            </div>
+                            <textarea
+                              value={reviewComment}
+                              onChange={(event) => setReviewComment(event.target.value)}
+                              placeholder="Share a quick note about the completed work"
+                              className="w-full bg-ink/5 border border-border rounded-[15px] px-4 py-3 text-sm outline-none min-h-[110px]"
+                            />
+                            {reviewError && <p className="text-xs text-red-500 mt-3">{reviewError}</p>}
+                            <div className="flex justify-end gap-3 mt-4">
+                              <button onClick={handleCancelReview} className="btn-outline py-2 px-4 text-xs justify-center">
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => handleSubmitReview(project)}
+                                disabled={reviewSubmitting}
+                                className="btn-primary py-2 px-4 text-xs justify-center disabled:opacity-50"
+                              >
+                                {reviewSubmitting ? 'Submitting...' : 'Submit Rating'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {completedProjects.length === 0 && (
+              <div className="card">
+                <h3 className="font-bold text-xl mb-3">Completed Job Postings</h3>
+                <div className="text-sm text-muted">No completed jobs yet.</div>
+              </div>
+            )}
+
             <div className="card">
-              <h3 className="font-bold text-xl mb-6">Active Contracts</h3>
+              <h3 className="font-bold text-xl mb-6">Active Contracts ({activeProjects.length})</h3>
               <div className="space-y-6">
                 {activeProjects.map((project) => {
                   const submissions = milestonesByProject[project.id] || [];
@@ -295,7 +460,7 @@ export const DashboardPage = () => {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
               <Shared.StatCard value={`${activeProjects.length}`} label="Active Contracts" color="bg-accent-orange" />
-              <Shared.StatCard value={`${formatTokenAmount(activeEscrow)}`} label="Pending Escrow" color="bg-accent-cyan" />
+              <Shared.StatCard value={`${completedProjects.length}`} label="Completed Contracts" color="bg-accent-green" />
               <Shared.StatCard value={`${formatTokenAmount(profile?.totalEarned)}`} label="Total Earned" color="bg-accent-blue" />
               <Shared.StatCard value={ratingAverage} label="Reputation Score" color="bg-accent-yellow" />
             </div>
@@ -318,9 +483,9 @@ export const DashboardPage = () => {
 
                       <div className="mb-6">
                         <h5 className="text-sm font-bold mb-3">Milestones</h5>
-                        <div className="space-y-3">
+                        <div className="space-y-2">
                           {milestones.map((milestone) => (
-                            <div key={milestone.milestoneNum} className={`flex items-center justify-between p-3 rounded-[10px] border border-border ${milestone.status === 'approved' ? 'bg-ink/5 opacity-60' : 'bg-ink/5'}`}>
+                            <div key={milestone.milestoneNum} className={`flex items-center justify-between ${milestone.status === 'approved' ? 'opacity-60' : ''}`}>
                               <div>
                                 <p className="text-sm font-bold">{milestone.title}</p>
                                 <p className="text-xs text-muted">{milestone.description}</p>
@@ -333,6 +498,13 @@ export const DashboardPage = () => {
                                     className="text-xs text-accent-cyan font-bold hover:underline mt-1"
                                   >
                                     Submit Work
+                                  </button>
+                                ) : milestone.status === 'rejected' ? (
+                                  <button
+                                    onClick={() => handleSubmitWork(milestone)}
+                                    className="text-xs text-accent-orange font-bold hover:underline mt-1"
+                                  >
+                                    Resubmit Work
                                   </button>
                                 ) : (
                                   <span className="text-xs text-muted mt-1 block capitalize">{milestone.status}</span>
@@ -356,6 +528,72 @@ export const DashboardPage = () => {
                 {activeProjects.length === 0 && <div className="text-sm text-muted">No active contracts yet.</div>}
               </div>
             </div>
+
+            {completedProjects.length > 0 && (
+              <div className="card">
+                <h3 className="font-bold text-xl mb-6">Completed Contracts</h3>
+                <div className="space-y-6">
+                  {completedProjects.map((project) => {
+                    const milestones = buildMilestones(project, milestonesByProject[project.id] || []);
+                    const submittedReview = reviewsByProjectId[project.id];
+
+                    return (
+                      <div key={project.id} className="border border-border rounded-[15px] p-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h4 className="font-bold text-lg mb-1">{project.title}</h4>
+                            <p className="text-xs text-muted">Client: {formatAddress(project.clientAddress || '')}</p>
+                          </div>
+                          <span className="px-3 py-1 bg-accent-green/10 text-accent-green rounded-full text-[10px] font-bold uppercase tracking-widest">Completed</span>
+                        </div>
+
+                        <div className="mb-4">
+                          <p className="text-sm text-muted mb-2">Completed {formatRelativeTime(project.updatedAt)}</p>
+                        </div>
+
+                        <div className="mb-6">
+                          <h5 className="text-sm font-bold mb-3">Milestones</h5>
+                          <div className="space-y-2">
+                            {milestones.map((milestone) => (
+                              <div key={milestone.milestoneNum} className="flex items-center justify-between opacity-60">
+                                <div>
+                                  <p className="text-sm font-bold">{milestone.title}</p>
+                                  <p className="text-xs text-muted">{milestone.description}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-sm font-bold">{milestone.amount}</p>
+                                  <span className="text-xs text-muted mt-1 block capitalize">{milestone.status}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between border-t border-border pt-4">
+                          <div>
+                            <p className="text-[10px] text-muted uppercase tracking-widest font-bold mb-1">Total Earned</p>
+                            <p className="font-bold text-accent-green">{formatTokenAmount(project.budget)} {project.tokenType}</p>
+                          </div>
+                          <div className="text-right">
+                            {submittedReview ? (
+                              <div>
+                                <div className="flex items-center gap-1 mb-1">
+                                  <Star size={16} className="text-accent-yellow fill-accent-yellow" />
+                                  <span className="text-sm font-bold">{submittedReview.rating}.0</span>
+                                </div>
+                                <p className="text-xs text-muted">Rated by client</p>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted">Not yet rated</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

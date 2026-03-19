@@ -102,6 +102,12 @@ export interface ApproveMilestoneInput {
   releaseTxId: string;
 }
 
+export interface CreateReviewInput {
+  projectId: number;
+  rating: number;
+  comment?: string;
+}
+
 export interface UpdateMyProfileInput {
   username?: string;
   specialty?: string;
@@ -558,6 +564,17 @@ export async function getUserProjects(address: string) {
 
 export async function getUserReviews(address: string) {
   return apiRequest<ApiUserReview[]>(`/users/${address}/reviews`, { method: 'GET' });
+}
+
+export async function getMyReviews() {
+  return apiRequest<ApiUserReview[]>('/reviews/mine', { method: 'GET' });
+}
+
+export async function createReview(input: CreateReviewInput) {
+  return apiRequest<ApiUserReview>('/reviews', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
 }
 
 export async function getCurrentUser() {

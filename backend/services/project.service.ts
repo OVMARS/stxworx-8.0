@@ -84,7 +84,7 @@ export const projectService = {
         and(
           or(
             eq(projects.status, "active"),
-            eq(projects.status, "disputed")  // include legacy disputed — disputes are per-milestone now
+            eq(projects.status, "disputed")
           ),
           or(
             eq(projects.clientId, userId),
