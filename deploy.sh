@@ -9,7 +9,17 @@ echo "Starting deployment setup..."
 apt-get update -y
 apt-get upgrade -y
 
-# 2. Install Docker if not installed
+# 2. Install Node.js v20 LTS if not installed
+if ! command -v node &> /dev/null
+then
+    echo "Node.js not found. Installing Node v20 LTS..."
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y nodejs
+else
+    echo "Node.js is already installed. Version: $(node -v)"
+fi
+
+# 3. Install Docker if not installed
 if ! command -v docker &> /dev/null
 then
     echo "Docker not found. Installing Docker..."
