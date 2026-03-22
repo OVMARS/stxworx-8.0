@@ -24,7 +24,6 @@ import type { ApiUserProfile, ApiUserReview } from '../types/user';
 type MilestoneView = {
   projectId: number;
   projectOnChainId?: number | null;
-  freelancerAddress?: string;
   milestoneNum: number;
   title: string;
   description: string;
@@ -44,7 +43,6 @@ function buildMilestones(project: ApiProject, submissions: ApiMilestoneSubmissio
     return {
       projectId: project.id,
       projectOnChainId: project.onChainId,
-      freelancerAddress: project.freelancerAddress,
       milestoneNum,
       title: `${milestoneNum}. ${milestone.title}`,
       description: milestone.description,
