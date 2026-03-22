@@ -416,7 +416,10 @@ export const HomePage = () => {
               <h2 className="text-4xl md:text-6xl font-black text-white tracking-tighter leading-none mb-8 uppercase">
                 build the future of decentralized tech
               </h2>
-              <button className="bg-white text-bg px-8 py-4 rounded-[15px] font-bold hover:bg-accent-orange transition-all uppercase">
+              <button 
+                onClick={() => window.open('https://dorahacks.io/buidl/41161', '_blank')}
+                className="bg-white text-bg px-8 py-4 rounded-[15px] font-bold hover:bg-accent-orange transition-all uppercase"
+              >
                 vote now
               </button>
             </div>
