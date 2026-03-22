@@ -428,7 +428,7 @@ export const TopHeader = ({ theme, toggleTheme }: { theme: 'dark' | 'light', tog
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                className="absolute top-full right-0 mt-4 w-80 bg-surface border border-border rounded-[15px] shadow-2xl overflow-hidden z-50"
+                className="fixed top-24 left-2 right-2 mt-0 w-auto bg-surface border border-border rounded-[15px] shadow-2xl overflow-hidden z-50 md:absolute md:top-full md:left-auto md:right-0 md:mt-4 md:w-80"
               >
                 <div className="p-4 border-b border-border flex items-center justify-between">
                   <h3 className="font-bold text-sm">Recent Messages</h3>
@@ -497,7 +497,7 @@ export const TopHeader = ({ theme, toggleTheme }: { theme: 'dark' | 'light', tog
                 initial={{ opacity: 0, y: 10, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                className="absolute top-full right-0 mt-4 w-80 bg-surface border border-border rounded-[15px] shadow-2xl overflow-hidden z-50"
+                className="fixed top-24 left-2 right-2 mt-0 w-auto bg-surface border border-border rounded-[15px] shadow-2xl overflow-hidden z-50 md:absolute md:top-full md:left-auto md:right-0 md:mt-4 md:w-80"
               >
                 <div className="p-4 border-b border-border flex items-center justify-between">
                   <h3 className="font-bold text-sm">Recent Notifications</h3>

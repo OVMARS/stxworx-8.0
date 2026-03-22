@@ -189,7 +189,7 @@ export const HomePage = () => {
         ).toFixed(1)
       : '4.0';
   return (
-    <div className="pt-28 pb-20 px-6 md:pl-[92px]">
+    <div className="pt-28 pb-20 md:pl-[92px]">
       <div className="container-custom">
         {/* Hero Section */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 mb-20">
@@ -199,7 +199,7 @@ export const HomePage = () => {
               animate={{ opacity: 1, y: 0 }}
               className="mb-12"
             >
-              <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.85] mb-8">
+              <h1 className="text-[clamp(3.2rem,11vw,3.75rem)] sm:text-6xl md:text-8xl font-black tracking-tighter leading-[0.85] mb-8">
                 JOIN THE ULTIMATE <br />
                 <span className="text-accent-orange">COMMUNITY</span> FOR <br />
                 DESIGNERS AND <br />
