@@ -121,7 +121,7 @@
        ms-count: ms-count, token-type: TOKEN-SBTC, refunded: false, created-at: burn-block-height})
     (if (> m1 u0) (map-set milestones {project: id, ms: u1} {amount: m1, complete: false, released: false, completed-at: u0}) true)
     (print {event: "STXWORX-Job", id: id, memo: "STXWORX Job", token: "sBTC", dao-cut: dao-cut})
-    (ok id))
+    (ok id)))
 
 (define-public (create-project-usdcx (freelancer principal) (m1 uint) (m2 uint) (m3 uint) (m4 uint) (usdcx-token <sip010-ft-trait>))
   (let ((id (+ (var-get project-counter) u1))
@@ -148,7 +148,7 @@
        ms-count: ms-count, token-type: TOKEN-USDCX, refunded: false, created-at: burn-block-height})
     (if (> m1 u0) (map-set milestones {project: id, ms: u1} {amount: m1, complete: false, released: false, completed-at: u0}) true)
     (print {event: "STXWORX-Job", id: id, memo: "STXWORX Job", token: "USDCx", dao-cut: dao-cut})
-    (ok id))
+    (ok id)))
 
 (define-read-only (get-dao-wallet) (var-get dao-wallet))
 (define-read-only (get-project (id uint)) (map-get? projects id))
