@@ -65,26 +65,26 @@ plan:
     - transaction-type: emulated-contract-publish
       contract-name: escrow-multi-token
       emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-      path: contracts/escrow-multi-token.clar
+      path: contracts\escrow-multi-token.clar
       clarity-version: 4
     - transaction-type: emulated-contract-publish
       contract-name: escrow-multi-token-v7
       emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-      path: contracts/escrow-multi-token-v7.clar
+      path: contracts\escrow-multi-token-v7.clar
       clarity-version: 4
     - transaction-type: emulated-contract-publish
       contract-name: rep-sft
       emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-      path: contracts/rep-sft.clar
+      path: contracts\rep-sft.clar
       clarity-version: 4
     - transaction-type: emulated-contract-publish
       contract-name: stxworx-badge
       emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-      path: contracts/stxworx-badge.clar
+      path: contracts\stxworx-badge.clar
       clarity-version: 4
     - transaction-type: emulated-contract-publish
       contract-name: verify-soulbound
       emulated-sender: ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM
-      path: contracts/verify-soulbound.clar
+      path: contracts\verify-soulbound.clar
       clarity-version: 4
     epoch: '3.3'

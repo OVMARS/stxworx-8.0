@@ -33,7 +33,7 @@
 (define-data-var project-counter uint u0)
 (define-data-var dao-governor principal tx-sender)
 (define-data-var paused bool false)
-(define-data-var treasury principal tx-sender)
+(define-data-var dao-wallet principal tx-sender)
 
 (define-map projects uint
   { client: principal,
@@ -81,9 +81,9 @@
                            (if (> m4 u0) u1 u0))))))
     (try! (assert-not-paused))
     (asserts! (and (>= ms-count u2) (<= ms-count MAX-MILESTONES)) ERR-INVALID-MS)
-    (try! (stx-transfer? gross tx-sender (as-contract tx-sender)))
-    (try! (as-contract (stx-transfer? dao-cut (as-contract tx-sender) (var-get dao-wallet))))
-    (try! (as-contract (stx-transfer? client-fee (as-contract tx-sender) (var-get dao-wallet))))
+    (try! (stx-transfer? gross tx-sender current-contract))
+    (try! (stx-transfer? dao-cut current-contract (var-get dao-wallet)))
+    (try! (stx-transfer? client-fee current-contract (var-get dao-wallet)))
     (var-set project-counter id)
     (map-set projects id
       {client: tx-sender, freelancer: freelancer, gross: gross, net: net,
@@ -93,13 +93,10 @@
     (if (> m2 u0) (map-set milestones {project: id, ms: u2} {amount: m2, complete: false, released: false, completed-at: u0}) true)
     (if (> m3 u0) (map-set milestones {project: id, ms: u3} {amount: m3, complete: false, released: false, completed-at: u0}) true)
     (if (> m4 u0) (map-set milestones {project: id, ms: u4} {amount: m4, complete: false, released: false, completed-at: u0}) true)
-    (print {event: "STXWORX-Job", id: id, memo: (concat "STXWORX Job #" (to-string id)), dao-cut: dao-cut})
+    (print {event: "STXWORX-Job", id: id, memo: "STXWORX Job", dao-cut: dao-cut})
     (ok id)))
 
-(define-public (create-project-sbtc
-    (freelancer principal)
-    (m1 uint) (m2 uint) (m3 uint) (m4 uint)
-    (sbtc-token <sip010-ft-trait>))
+(define-public (create-project-sbtc (freelancer principal) (m1 uint) (m2 uint) (m3 uint) (m4 uint) (sbtc-token <sip010-ft-trait>))
   (let ((id (+ (var-get project-counter) u1))
         (gross (+ m1 (+ m2 (+ m3 m4))))
         (dao-cut (/ (* gross DAO-INSTANT) u10000))
@@ -110,7 +107,7 @@
                      (+ (if (> m2 u0) u1 u0)
                         (+ (if (> m3 u0) u1 u0)
                            (if (> m4 u0) u1 u0))))))
-        (contract-addr (as-contract tx-sender))
+        (contract-addr current-contract)
         (balance-before (unwrap! (contract-call? sbtc-token get-balance contract-addr) (err u118))))
     (try! (assert-not-paused))
     (asserts! (and (>= ms-count u2) (<= ms-count MAX-MILESTONES)) ERR-INVALID-MS)
@@ -123,13 +120,10 @@
        dao-cut: dao-cut, fee-client: client-fee, fee-freelancer: freelancer-fee,
        ms-count: ms-count, token-type: TOKEN-SBTC, refunded: false, created-at: burn-block-height})
     (if (> m1 u0) (map-set milestones {project: id, ms: u1} {amount: m1, complete: false, released: false, completed-at: u0}) true)
-    (print {event: "STXWORX-Job", id: id, memo: (concat "STXWORX Job #" (to-string id)), token: "sBTC", dao-cut: dao-cut})
-    (ok id)))
+    (print {event: "STXWORX-Job", id: id, memo: "STXWORX Job", token: "sBTC", dao-cut: dao-cut})
+    (ok id))
 
-(define-public (create-project-usdcx
-    (freelancer principal)
-    (m1 uint) (m2 uint) (m3 uint) (m4 uint)
-    (usdcx-token <sip010-ft-trait>))
+(define-public (create-project-usdcx (freelancer principal) (m1 uint) (m2 uint) (m3 uint) (m4 uint) (usdcx-token <sip010-ft-trait>))
   (let ((id (+ (var-get project-counter) u1))
         (gross (+ m1 (+ m2 (+ m3 m4))))
         (dao-cut (/ (* gross DAO-INSTANT) u10000))
@@ -140,7 +134,7 @@
                      (+ (if (> m2 u0) u1 u0)
                         (+ (if (> m3 u0) u1 u0)
                            (if (> m4 u0) u1 u0))))))
-        (contract-addr (as-contract tx-sender))
+        (contract-addr current-contract)
         (balance-before (unwrap! (contract-call? usdcx-token get-balance contract-addr) (err u118))))
     (try! (assert-not-paused))
     (asserts! (and (>= ms-count u2) (<= ms-count MAX-MILESTONES)) ERR-INVALID-MS)
@@ -153,8 +147,8 @@
        dao-cut: dao-cut, fee-client: client-fee, fee-freelancer: freelancer-fee,
        ms-count: ms-count, token-type: TOKEN-USDCX, refunded: false, created-at: burn-block-height})
     (if (> m1 u0) (map-set milestones {project: id, ms: u1} {amount: m1, complete: false, released: false, completed-at: u0}) true)
-    (print {event: "STXWORX-Job", id: id, memo: (concat "STXWORX Job #" (to-string id)), token: "USDCx", dao-cut: dao-cut})
-    (ok id))))
+    (print {event: "STXWORX-Job", id: id, memo: "STXWORX Job", token: "USDCx", dao-cut: dao-cut})
+    (ok id))
 
 (define-read-only (get-dao-wallet) (var-get dao-wallet))
 (define-read-only (get-project (id uint)) (map-get? projects id))
