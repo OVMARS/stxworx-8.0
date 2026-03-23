@@ -9,35 +9,35 @@ plan:
     transactions:
     - transaction-type: contract-publish
       contract-name: escrow-multi-token
-      expected-sender: STTCT2FCG2AE0T2Q70KBA1GDM4VN14FRW5A1NBR0
+      expected-sender: ST4RX4SP7XYEC9BSA6XJFA74Y45M3TQFH13NT2M9
       cost: 407770
       path: contracts/escrow-multi-token.clar
       anchor-block-only: true
       clarity-version: 4
     - transaction-type: contract-publish
       contract-name: escrow-multi-token-v7
-      expected-sender: STTCT2FCG2AE0T2Q70KBA1GDM4VN14FRW5A1NBR0
-      cost: 552020
+      expected-sender: ST4RX4SP7XYEC9BSA6XJFA74Y45M3TQFH13NT2M9
+      cost: 551700
       path: contracts/escrow-multi-token-v7.clar
       anchor-block-only: true
       clarity-version: 4
     - transaction-type: contract-publish
       contract-name: rep-sft
-      expected-sender: STTCT2FCG2AE0T2Q70KBA1GDM4VN14FRW5A1NBR0
+      expected-sender: ST4RX4SP7XYEC9BSA6XJFA74Y45M3TQFH13NT2M9
       cost: 130230
       path: contracts/rep-sft.clar
       anchor-block-only: true
       clarity-version: 4
     - transaction-type: contract-publish
       contract-name: stxworx-badge
-      expected-sender: STTCT2FCG2AE0T2Q70KBA1GDM4VN14FRW5A1NBR0
+      expected-sender: ST4RX4SP7XYEC9BSA6XJFA74Y45M3TQFH13NT2M9
       cost: 130230
       path: contracts/stxworx-badge.clar
       anchor-block-only: true
       clarity-version: 4
     - transaction-type: contract-publish
       contract-name: verify-soulbound
-      expected-sender: STTCT2FCG2AE0T2Q70KBA1GDM4VN14FRW5A1NBR0
+      expected-sender: ST4RX4SP7XYEC9BSA6XJFA74Y45M3TQFH13NT2M9
       cost: 130230
       path: contracts/verify-soulbound.clar
       anchor-block-only: true
