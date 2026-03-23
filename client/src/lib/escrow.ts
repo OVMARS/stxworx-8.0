@@ -16,7 +16,7 @@ import {
   USDCX_CONTRACT_ADDRESS,
   USDCX_CONTRACT_NAME,
 } from './constants';
-import { network } from './stacks';
+import { getUserAddress, network } from './stacks';
 
 type EscrowTokenType = 'STX' | 'sBTC' | 'USDCx';
 
@@ -51,8 +51,15 @@ function readUintValue(value: any) {
 function contractCall(options: ContractCallOptions) {
   return new Promise<string>((resolve, reject) => {
     try {
+      const senderAddress = getUserAddress();
+      if (!senderAddress) {
+        reject(new Error('No connected wallet address found'));
+        return;
+      }
+
       openContractCall({
         network,
+        stxAddress: senderAddress,
         contractAddress: options.contractAddress,
         contractName: options.contractName,
         functionName: options.functionName,
