@@ -1,6 +1,6 @@
 # STX Freelance Platform
 
-A decentralized freelance escrow platform built on the Stacks blockchain, supporting both STX and sBTC payments with milestone-based project management.
+A decentralized freelance escrow and bounty platform built on the Stacks blockchain, supporting STX,sBTC and usdcx payments with milestone-based project management.
 
 ## 🚀 Quick Start
 

@@ -10,13 +10,17 @@ import {
   formatTokenAmount,
   getMyActiveProjects,
   getMyCompletedProjects,
+  getMyProposals,
   getMyReviews,
   getMyPostedProjects,
+  getProject,
   getProjectMilestones,
   getProjectProposals,
   getUserProfile,
   getUserReviews,
   toAppJob,
+  type ApiProposal,
+  withdrawProposal,
 } from '../lib/api';
 import type { ApiProject } from '../types/job';
 import type { ApiUserProfile, ApiUserReview } from '../types/user';
@@ -31,6 +35,10 @@ type MilestoneView = {
   tokenType: ApiProject['tokenType'];
   status: 'pending' | 'submitted' | 'approved' | 'rejected';
   deliverableUrl?: string;
+};
+
+type PendingProposalView = ApiProposal & {
+  projectTitle?: string;
 };
 
 function buildMilestones(project: ApiProject, submissions: ApiMilestoneSubmission[]): MilestoneView[] {
@@ -76,6 +84,8 @@ export const DashboardPage = () => {
   const [reviewComment, setReviewComment] = useState('');
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [pendingProposals, setPendingProposals] = useState<PendingProposalView[]>([]);
+  const [withdrawingProposalId, setWithdrawingProposalId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   const handleSubmitWork = (milestone: MilestoneView) => {
@@ -150,12 +160,39 @@ export const DashboardPage = () => {
 
       setProposalCounts(Object.fromEntries(proposalEntries));
       setMilestonesByProject(Object.fromEntries(milestoneEntries));
+
+      if (userRole === 'freelancer') {
+        const myProposals = await getMyProposals().catch(() => []);
+        const pendingOnly = myProposals.filter((proposal) => proposal.status === 'pending');
+        const uniqueProjectIds = Array.from(new Set(pendingOnly.map((proposal) => proposal.projectId)));
+
+        const projectEntries = await Promise.all(
+          uniqueProjectIds.map(async (projectId) => {
+            try {
+              const project = await getProject(projectId);
+              return [projectId, project.title] as const;
+            } catch {
+              return [projectId, undefined] as const;
+            }
+          }),
+        );
+
+        const projectTitlesById = Object.fromEntries(projectEntries);
+        setPendingProposals(
+          pendingOnly.map((proposal) => ({
+            ...proposal,
+            projectTitle: projectTitlesById[proposal.projectId],
+          })),
+        );
+      } else {
+        setPendingProposals([]);
+      }
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {
       setLoading(false);
     }
-  }, [walletAddress]);
+  }, [userRole, walletAddress]);
 
   useEffect(() => {
     loadDashboardData();
@@ -212,6 +249,22 @@ export const DashboardPage = () => {
       setReviewError(error instanceof Error ? error.message : 'Failed to submit review');
     } finally {
       setReviewSubmitting(false);
+    }
+  };
+
+  const handleWithdrawProposal = async (proposalId: number) => {
+    if (withdrawingProposalId) {
+      return;
+    }
+
+    setWithdrawingProposalId(proposalId);
+    try {
+      await withdrawProposal(proposalId);
+      await loadDashboardData();
+    } catch (error) {
+      console.error('Failed to withdraw proposal:', error);
+    } finally {
+      setWithdrawingProposalId(null);
     }
   };
 
@@ -341,7 +394,13 @@ export const DashboardPage = () => {
                           <p className="font-bold">{proposalCounts[project.id] ?? 0}</p>
                         </div>
                         <div className="flex-1 sm:text-right">
-                          <Link to="/review-proposals" state={{ projectId: project.id }} className="text-accent-orange text-xs font-bold hover:underline">View Proposals</Link>
+                          <Link
+                            to="/review-proposals"
+                            state={{ projectId: project.id }}
+                            className="btn-outline py-2 px-4 text-xs inline-flex justify-center"
+                          >
+                            View Proposals
+                          </Link>
                         </div>
                       </div>
                     </div>
@@ -467,6 +526,38 @@ export const DashboardPage = () => {
               <Shared.StatCard value={`${completedProjects.length}`} label="Completed Contracts" color="bg-accent-green" />
               <Shared.StatCard value={`${formatTokenAmount(profile?.totalEarned)}`} label="Total Earned" color="bg-accent-blue" />
               <Shared.StatCard value={ratingAverage} label="Reputation Score" color="bg-accent-yellow" />
+            </div>
+
+            <div className="card mb-8">
+              <h3 className="font-bold text-xl mb-6">Pending Proposals</h3>
+              <div className="space-y-4">
+                {pendingProposals.map((proposal) => (
+                  <div key={proposal.id} className="border border-border rounded-[15px] p-5 bg-ink/5">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+                      <div>
+                        <h4 className="font-bold text-base">{proposal.projectTitle || `Project #${proposal.projectId}`}</h4>
+                        <p className="text-xs text-muted">
+                          Submitted {proposal.createdAt ? formatRelativeTime(proposal.createdAt) : 'recently'}
+                        </p>
+                      </div>
+                      <span className="px-3 py-1 bg-accent-orange/10 text-accent-orange rounded-full text-[10px] font-bold uppercase tracking-widest">
+                        Pending
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted leading-relaxed mb-4">{proposal.coverLetter}</p>
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => handleWithdrawProposal(proposal.id)}
+                        disabled={withdrawingProposalId === proposal.id}
+                        className="btn-outline py-2 px-4 text-xs justify-center disabled:opacity-50"
+                      >
+                        {withdrawingProposalId === proposal.id ? 'Cancelling...' : 'Cancel Proposal'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {pendingProposals.length === 0 && <div className="text-sm text-muted">No pending proposals.</div>}
+              </div>
             </div>
 
             <div className="card">

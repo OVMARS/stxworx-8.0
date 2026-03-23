@@ -112,7 +112,7 @@ const getInitialTheme = (): 'dark' | 'light' => {
 // --- Components ---
 const LiveChat = () => {
   const { walletAddress, blockedWallets } = Shared.useWallet();
-  const isBlocked = walletAddress && blockedWallets.includes(walletAddress);
+  const isBlocked = Boolean(walletAddress && blockedWallets.includes(walletAddress));
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [chat, setChat] = useState([
@@ -120,8 +120,8 @@ const LiveChat = () => {
   ]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // If user is not connected or is blocked, they cannot use the chat
-  if (!walletAddress || isBlocked) return null;
+  // Hide chat only for blocked wallets; guests can still access support chat.
+  if (isBlocked) return null;
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,7 +184,12 @@ const LiveChat = () => {
               <div className="p-4 md:p-6 bg-accent-orange text-bg flex items-center justify-between">
                 <div>
                   <h3 className="font-black tracking-tighter">STXWORX Support</h3>
-                  <p className="text-[10px] font-bold opacity-60">Online • Usually replies in 5m</p>
+                  <p className="text-[10px] font-bold opacity-60">
+                    AI Support Online • Typical response time: under 1 minute
+                  </p>
+                  {!walletAddress && (
+                    <p className="text-[10px] font-semibold opacity-90 mt-1">Sign in for faster support.</p>
+                  )}
                 </div>
                 <button onClick={() => setIsOpen(false)}><X size={20} /></button>
               </div>
@@ -613,7 +618,7 @@ export default function App() {
                     href="https://gowhite.xyz/" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-white drop-shadow-[0_0_8px_rgba(255,255,255,0.8)] hover:text-ink transition-all duration-300 relative"
+                    className="text-ink hover:text-ink/80 transition-colors duration-300"
                   >
                     White Fintech
                   </a>
