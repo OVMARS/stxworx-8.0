@@ -53,7 +53,7 @@ clarity-version = 4
 (define-constant ERR-CONTRACT-PAUSED (err u119))
 
 (define-data-var project-counter uint u0)
-(define-data-var dao-wallet principal 'STTCT2FCG2AE0T2Q70KBA1GDM4VN14FRW5A1NBR0) ;; Testnet
+(define-data-var dao-wallet principal 'ST4RX4SP7XYEC9BSA6XJFA74Y45M3TQFH13NT2M9) ;; Testnet
 ;; Mainnet: change to 'SP4RX4SP7XYEC9BSA6XJFA74Y45M3TQFH2RK8D3X' before deploy
 (define-data-var dao-governor principal tx-sender)
 (define-data-var paused bool false)
