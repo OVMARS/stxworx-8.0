@@ -53,17 +53,9 @@ function contractCall(options: ContractCallOptions) {
     try {
       const senderAddress = getUserAddress();
       if (!senderAddress) {
-        console.error('[escrow] No wallet address found');
         reject(new Error('No connected wallet address found'));
         return;
       }
-
-      console.log('[escrow] Opening contract call:', {
-        contractAddress: options.contractAddress,
-        contractName: options.contractName,
-        functionName: options.functionName,
-        senderAddress,
-      });
 
       openContractCall({
         network,
@@ -74,22 +66,18 @@ function contractCall(options: ContractCallOptions) {
         functionArgs: options.functionArgs,
         postConditionMode: options.postConditionMode,
         onFinish: (data: any) => {
-          console.log('[escrow] Contract call finished:', data);
           const txId = data?.txId || data?.txid;
           if (!txId) {
-            console.error('[escrow] No txId returned from wallet:', data);
             reject(new Error('Stacks wallet did not return a transaction id'));
             return;
           }
           resolve(txId);
         },
         onCancel: () => {
-          console.warn('[escrow] Wallet transaction cancelled');
           reject(new Error('Wallet transaction was cancelled'));
         },
       });
     } catch (error) {
-      console.error('[escrow] Exception in contractCall:', error);
       reject(error);
     }
   });
@@ -114,12 +102,17 @@ export async function createEscrowForProject(project: ApiProject, freelancerAddr
   }
 
   const onChainId = await getNextProjectOnChainId();
+  const milestone1 = toBaseUnits(project.milestone1Amount, project.tokenType);
+  const milestone2 = toBaseUnits(project.milestone2Amount, project.tokenType);
+  const milestone3 = toBaseUnits(project.milestone3Amount, project.tokenType);
+  const milestone4 = toBaseUnits(project.milestone4Amount, project.tokenType);
+
   const functionArgs: any[] = [
     standardPrincipalCV(freelancerAddress),
-    uintCV(toBaseUnits(project.milestone1Amount, project.tokenType)),
-    uintCV(toBaseUnits(project.milestone2Amount, project.tokenType)),
-    uintCV(toBaseUnits(project.milestone3Amount, project.tokenType)),
-    uintCV(toBaseUnits(project.milestone4Amount, project.tokenType)),
+    uintCV(milestone1),
+    uintCV(milestone2),
+    uintCV(milestone3),
+    uintCV(milestone4),
   ];
 
   let functionName = 'create-project-stx';
