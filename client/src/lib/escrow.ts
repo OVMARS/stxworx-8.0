@@ -48,6 +48,24 @@ function readUintValue(value: any) {
   return Number(raw);
 }
 
+function formatTokenAmount(amount: number, tokenType: EscrowTokenType) {
+  const decimals = tokenType === 'sBTC' ? 8 : 6;
+  return (amount / 10 ** decimals).toFixed(decimals);
+}
+
+async function getSip10Balance(contractAddress: string, contractName: string, ownerAddress: string) {
+  const result = await fetchCallReadOnlyFunction({
+    network,
+    contractAddress,
+    contractName,
+    functionName: 'get-balance',
+    functionArgs: [standardPrincipalCV(ownerAddress)],
+    senderAddress: ownerAddress,
+  });
+
+  return readUintValue(result);
+}
+
 function contractCall(options: ContractCallOptions) {
   return new Promise<string>((resolve, reject) => {
     try {
@@ -101,11 +119,17 @@ export async function createEscrowForProject(project: ApiProject, freelancerAddr
     throw new Error(`Unsupported token type for escrow contract: ${project.tokenType}`);
   }
 
+  const senderAddress = getUserAddress();
+  if (!senderAddress) {
+    throw new Error('No connected wallet address found');
+  }
+
   const onChainId = await getNextProjectOnChainId();
   const milestone1 = toBaseUnits(project.milestone1Amount, project.tokenType);
   const milestone2 = toBaseUnits(project.milestone2Amount, project.tokenType);
   const milestone3 = toBaseUnits(project.milestone3Amount, project.tokenType);
   const milestone4 = toBaseUnits(project.milestone4Amount, project.tokenType);
+  const total = milestone1 + milestone2 + milestone3 + milestone4;
 
   const functionArgs: any[] = [
     standardPrincipalCV(freelancerAddress),
@@ -118,9 +142,21 @@ export async function createEscrowForProject(project: ApiProject, freelancerAddr
   let functionName = 'create-project-stx';
   if (project.tokenType === 'sBTC') {
     functionName = 'create-project-sbtc';
+    const balance = await getSip10Balance(SBTC_CONTRACT_ADDRESS, SBTC_CONTRACT_NAME, senderAddress);
+    if (balance < total) {
+      throw new Error(
+        `Insufficient sBTC balance. Need ${formatTokenAmount(total, project.tokenType)} sBTC, wallet has ${formatTokenAmount(balance, project.tokenType)} sBTC.`,
+      );
+    }
     functionArgs.push(contractPrincipalCV(SBTC_CONTRACT_ADDRESS, SBTC_CONTRACT_NAME));
   } else if (project.tokenType === 'USDCx') {
     functionName = 'create-project-usdcx';
+    const balance = await getSip10Balance(USDCX_CONTRACT_ADDRESS, USDCX_CONTRACT_NAME, senderAddress);
+    if (balance < total) {
+      throw new Error(
+        `Insufficient USDCx balance. Need ${formatTokenAmount(total, project.tokenType)} USDCx, wallet has ${formatTokenAmount(balance, project.tokenType)} USDCx.`,
+      );
+    }
     functionArgs.push(contractPrincipalCV(USDCX_CONTRACT_ADDRESS, USDCX_CONTRACT_NAME));
   }
 
