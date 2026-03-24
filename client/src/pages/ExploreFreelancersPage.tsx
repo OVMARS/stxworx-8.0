@@ -177,7 +177,7 @@ export const FreelancersPage = () => {
                   </div>
                 </div>
 
-                <button onClick={() => handleOpenMessage(toDisplayName(freelancer), freelancer.stxAddress)} className="w-full btn-outline py-4 rounded-[15px] text-xs font-bold hover:bg-white hover:text-bg transition-all">
+                <button onClick={() => handleOpenMessage(toDisplayName(freelancer), freelancer.stxAddress)} className="w-full btn-outline py-4 rounded-[15px] text-xs font-bold hover:bg-white hover:text-ink transition-all">
                   Message
                 </button>
               </div>

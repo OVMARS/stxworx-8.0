@@ -413,32 +413,54 @@ export const TopHeader = ({ theme, toggleTheme }: { theme: 'dark' | 'light', tog
   return (
     <>
       <AnnouncementBar navigate={navigate} />
-      <header className="fixed top-12 left-0 md:left-[120px] right-0 h-20 bg-bg/80 backdrop-blur-xl border-b border-border z-40 px-3 sm:px-4 md:px-10 flex items-center justify-between overflow-x-clip">
+      <header className={`fixed top-12 left-0 md:left-[120px] right-0 h-20 border-b backdrop-blur-xl z-40 px-3 sm:px-4 md:px-10 flex items-center justify-between overflow-x-clip ${
+        theme === 'light'
+          ? 'bg-white/95 border-black/10 shadow-[0_6px_24px_rgba(0,0,0,0.08)]'
+          : 'bg-bg/80 border-border'
+      }`}>
       <div className="flex items-center gap-2 sm:gap-4 md:gap-8 min-w-0">
         <Link to="/" className="flex items-center md:hidden">
-          <img src="/favicon.png" alt="STXWORX" className="w-11 h-11 rounded-[12px] object-cover border border-white/20 shadow-[0_0_12px_rgba(255,94,0,0.35)]" />
+          <img
+            src="/favicon.png"
+            alt="STXWORX"
+            className={`w-11 h-11 rounded-[12px] object-cover border ${
+              theme === 'light'
+                ? 'border-black/15 shadow-[0_0_18px_rgba(0,0,0,0.45)]'
+                : 'border-white/20 shadow-[0_0_12px_rgba(255,94,0,0.35)]'
+            }`}
+          />
         </Link>
         <Link to="/" className="hidden md:flex items-center">
-          <Shared.Logo className="text-3xl" />
+          <Shared.Logo className={`text-3xl ${theme === 'light' ? 'drop-shadow-[0_0_14px_rgba(0,0,0,0.6)]' : ''}`} />
         </Link>
         <button
           type="button"
           onClick={() => setShowMobileSearch(true)}
-          className="md:hidden p-2 rounded-[15px] bg-surface border border-border text-muted hover:text-ink hover:bg-ink/5 transition-colors"
+          className={`md:hidden p-2 rounded-[15px] border transition-colors ${
+            theme === 'light'
+              ? 'bg-white border-black/15 text-ink/70 hover:text-ink hover:bg-black/5'
+              : 'bg-surface border-border text-muted hover:text-ink hover:bg-ink/5'
+          }`}
           aria-label="Search"
         >
           <Search size={18} />
         </button>
         <div className="relative hidden md:block w-28 sm:w-40 md:w-64 xl:w-96">
-          <div className="flex items-center gap-2 sm:gap-4 bg-surface px-3 sm:px-4 py-2 rounded-[15px] border border-border">
-            <Search size={18} className="text-muted" />
+          <div className={`flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2 rounded-[15px] border ${
+            theme === 'light'
+              ? 'bg-white border-black/15 shadow-[0_2px_12px_rgba(0,0,0,0.06)]'
+              : 'bg-surface border-border'
+          }`}>
+            <Search size={18} className={theme === 'light' ? 'text-ink/65' : 'text-muted'} />
             <input
               type="text"
               value={menuQuery}
               onChange={(event) => setMenuQuery(event.target.value)}
               onKeyDown={handleSearchKeyDown}
               placeholder="Search platform menus..."
-              className="bg-transparent border-none focus:ring-0 text-sm w-full placeholder:text-muted outline-none"
+              className={`bg-transparent border-none focus:ring-0 text-sm w-full outline-none ${
+                theme === 'light' ? 'text-ink placeholder:text-ink/45' : 'placeholder:text-muted'
+              }`}
             />
           </div>
 
@@ -482,7 +504,11 @@ export const TopHeader = ({ theme, toggleTheme }: { theme: 'dark' | 'light', tog
       <div className="flex items-center gap-2 sm:gap-4 md:gap-6 shrink-0">
         <button
           onClick={toggleTheme}
-          className="p-2 rounded-[15px] hover:bg-ink/5 text-muted hover:text-ink transition-all"
+          className={`p-2 rounded-[15px] transition-all ${
+            theme === 'light'
+              ? 'bg-white border border-black/15 text-ink/70 hover:text-ink hover:bg-black/5'
+              : 'text-muted hover:text-ink hover:bg-ink/5'
+          }`}
           title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
         >
           {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
@@ -490,7 +516,7 @@ export const TopHeader = ({ theme, toggleTheme }: { theme: 'dark' | 'light', tog
 
         <button
           onClick={() => (isSignedIn ? setShowLogoutConfirm(true) : handleConnect())}
-          className={`flex items-center justify-center sm:justify-start gap-2 min-w-10 h-10 px-2 sm:px-4 rounded-[15px] text-xs font-bold transition-all ${isSignedIn ? 'bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20' : 'bg-ink text-bg hover:bg-accent-orange'} ${isBlocked ? 'opacity-70 cursor-not-allowed' : ''}`}
+          className={`flex items-center justify-center sm:justify-start gap-2 min-w-10 h-10 px-2 sm:px-4 rounded-[15px] text-xs font-bold transition-all ${isSignedIn ? (theme === 'light' ? 'bg-accent-blue/10 text-accent-blue border border-accent-blue/25 hover:bg-accent-blue/15' : 'bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20') : 'bg-ink text-bg hover:bg-accent-orange'} ${isBlocked ? 'opacity-70 cursor-not-allowed' : ''}`}
           disabled={isBlocked}
         >
           <Wallet size={16} />

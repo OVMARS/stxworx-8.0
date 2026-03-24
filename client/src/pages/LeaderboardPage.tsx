@@ -58,7 +58,7 @@ export const LeaderboardPage = () => {
                     <p className="text-2xl font-black leading-none">{leader.avgRating.toFixed(1)}</p>
                     <p className="text-[10px] text-muted font-bold uppercase tracking-widest">Rating</p>
                   </div>
-                  <button onClick={() => navigate('/profile')} className="btn-outline py-3 px-6 rounded-[15px] text-[10px] font-bold uppercase tracking-widest hover:bg-white hover:text-bg transition-all w-full sm:w-auto justify-center">
+                  <button onClick={() => navigate('/profile')} className="btn-outline py-3 px-6 rounded-[15px] text-[10px] font-bold uppercase tracking-widest hover:bg-white hover:text-ink transition-all w-full sm:w-auto justify-center">
                     View Profile
                   </button>
                 </div>

@@ -1523,7 +1523,7 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
                 </div>
               </div>
               {!isEditing && isOwnProfile ? (
-                <button onClick={handleEditToggle} className="w-full bg-bg text-white py-4 rounded-[15px] font-bold hover:bg-white hover:text-bg transition-all">
+                <button onClick={handleEditToggle} className="w-full bg-bg text-white py-4 rounded-[15px] font-bold hover:bg-white hover:text-ink transition-all">
                   Edit Profile
                 </button>
               ) : null}

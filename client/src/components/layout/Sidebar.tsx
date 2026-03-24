@@ -62,7 +62,7 @@ export const Sidebar = () => {
         <div className="flex flex-col gap-2 pointer-events-auto w-[60px] items-center">
           <button 
             onClick={() => setIsExpanded(!isExpanded)}
-            className="w-10 h-10 bg-[#11151c] rounded-[15px] flex items-center justify-center text-gray-400 hover:text-white transition-colors shadow-lg"
+            className="w-10 h-10 bg-surface border border-border rounded-[15px] flex items-center justify-center text-muted hover:text-ink hover:bg-ink/5 transition-colors shadow-lg"
             title={isExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
           >
             {isExpanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
@@ -71,7 +71,7 @@ export const Sidebar = () => {
 
         <div className="flex flex-col gap-2 h-full pointer-events-auto">
           <div 
-            className={`bg-[#11151c] text-white flex flex-col transition-all duration-300 shadow-xl h-fit rounded-[15px] ${isExpanded ? 'w-56' : 'w-[60px]'}`}
+            className={`bg-surface text-ink border border-border flex flex-col transition-all duration-300 shadow-xl h-fit rounded-[15px] ${isExpanded ? 'w-56' : 'w-[60px]'}`}
           >
             <nav className="flex-1 py-4 flex flex-col gap-1 overflow-y-auto overflow-x-hidden no-scrollbar">
               {desktopMenuItems.map((item) => {
@@ -83,11 +83,11 @@ export const Sidebar = () => {
                     to={item.path}
                     className={`flex items-center mx-2 px-3 py-2.5 rounded-[15px] transition-colors group relative ${
                       isActive 
-                        ? 'bg-[#272e3f] text-[#70b896]' 
-                        : 'text-white hover:bg-[#1f2636]'
+                        ? 'bg-accent-blue/10 text-accent-blue' 
+                        : 'text-muted hover:bg-ink/5 hover:text-ink'
                     }`}
                   >
-                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={`shrink-0 ${!isActive ? 'text-gray-400 group-hover:text-white' : ''}`} />
+                    <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={`shrink-0 ${!isActive ? 'text-muted group-hover:text-ink' : ''}`} />
                     <span 
                       className={`ml-3 font-semibold text-xs whitespace-nowrap transition-all duration-300 ${
                         isExpanded ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 absolute left-10 pointer-events-none'
@@ -96,7 +96,7 @@ export const Sidebar = () => {
                       {item.label}
                     </span>
                     {!isExpanded && (
-                      <span className="absolute left-full ml-4 px-2 py-1 bg-[#272e3f] text-white text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
+                      <span className="absolute left-full ml-4 px-2 py-1 bg-surface text-ink border border-border shadow-xl text-[10px] font-bold rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50">
                         {item.label}
                       </span>
                     )}
@@ -126,7 +126,7 @@ export const Sidebar = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 14, scale: 0.98 }}
               transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-              className="fixed bottom-20 left-2 right-2 bg-[#11151c]/95 backdrop-blur-xl border border-[#1f2937] rounded-[15px] p-3 md:hidden z-[119] pointer-events-auto"
+              className="fixed bottom-20 left-2 right-2 bg-surface/95 backdrop-blur-xl border border-border rounded-[15px] p-3 md:hidden z-[119] pointer-events-auto"
             >
               <div className="grid grid-cols-2 gap-2">
                 {mobileMoreItems.map((item, index) => {
@@ -144,7 +144,7 @@ export const Sidebar = () => {
                         to={item.path}
                         onClick={() => setShowMobileMore(false)}
                         className={`flex items-center gap-2 px-3 py-2 rounded-[12px] transition-colors ${
-                          isActive ? 'bg-[#272e3f] text-[#70b896]' : 'text-gray-300 hover:bg-[#1f2636] hover:text-white'
+                          isActive ? 'bg-accent-blue/10 text-accent-blue' : 'text-muted hover:bg-ink/5 hover:text-ink'
                         }`}
                       >
                         <Icon size={16} strokeWidth={isActive ? 2.5 : 2} className="shrink-0" />
@@ -158,7 +158,7 @@ export const Sidebar = () => {
           </>
         )}
       </AnimatePresence>
-      <div className="fixed bottom-0 left-0 right-0 h-16 pb-[env(safe-area-inset-bottom)] bg-[#11151c]/95 backdrop-blur-xl border-t border-[#1f2937] md:hidden flex items-center justify-around px-2 z-[120] pointer-events-auto">
+      <div className="fixed bottom-0 left-0 right-0 h-16 pb-[env(safe-area-inset-bottom)] bg-surface/95 backdrop-blur-xl border-t border-border md:hidden flex items-center justify-around px-2 z-[120] pointer-events-auto">
         {mobilePrimaryItems.map((item) => {
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
@@ -172,7 +172,7 @@ export const Sidebar = () => {
               <Link 
                 to={item.path}
                 className={`flex flex-col items-center justify-center w-11 h-11 rounded-[15px] transition-colors ${
-                  isActive ? 'text-[#70b896]' : 'text-gray-400 hover:text-white'
+                  isActive ? 'text-accent-blue' : 'text-muted hover:text-ink'
                 }`}
               >
                 <Icon size={19} strokeWidth={isActive ? 2.5 : 2} />
@@ -188,7 +188,7 @@ export const Sidebar = () => {
             transition={{ type: 'spring', stiffness: 420, damping: 24 }}
             onClick={() => setShowMobileMore((current) => !current)}
             className={`flex flex-col items-center justify-center w-11 h-11 rounded-[15px] transition-colors ${
-              showMobileMore ? 'text-[#70b896]' : 'text-gray-400 hover:text-white'
+              showMobileMore ? 'text-accent-blue' : 'text-muted hover:text-ink'
             }`}
           >
             <MoreHorizontal size={19} strokeWidth={showMobileMore ? 2.5 : 2} />
