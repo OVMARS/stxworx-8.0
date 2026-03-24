@@ -147,6 +147,7 @@ export const proposals = mysqlTable("proposals", {
     .references(() => users.id)
     .notNull(),
   coverLetter: text("cover_letter").notNull(),
+  proposedAmount: decimal("proposed_amount", { precision: 18, scale: 8 }).notNull(),
   status: mysqlEnum("status", [...PROPOSAL_STATUSES]).default("pending").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -422,6 +423,7 @@ export const selectProjectSchema = createSelectSchema(projects);
 
 export const insertProposalSchema = createInsertSchema(proposals, {
   coverLetter: z.string().min(1),
+  proposedAmount: z.string().regex(/^\d+(\.\d{1,8})?$/).refine((value) => Number(value) > 0),
 }).omit({ id: true, createdAt: true, updatedAt: true, status: true });
 
 export const selectProposalSchema = createSelectSchema(proposals);

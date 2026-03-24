@@ -24,6 +24,7 @@ export interface ApiProposal {
   projectId: number;
   freelancerId: number;
   coverLetter: string;
+  proposedAmount: string;
   status: 'pending' | 'accepted' | 'rejected' | 'withdrawn';
   createdAt?: string;
   updatedAt?: string;
@@ -91,6 +92,7 @@ type X402TokenType = CreateProjectInput['tokenType'];
 export interface CreateProposalInput {
   projectId: number;
   coverLetter: string;
+  proposedAmount: string;
 }
 
 export interface SubmitMilestoneInput {

@@ -1,9 +1,10 @@
 import { db } from "../db";
 import { proposals, projects, users } from "@shared/schema";
-import { eq, and, ne } from "drizzle-orm";
+import { distributeProjectAmount } from "../../shared/project-milestones";
+import { eq, and, ne, inArray } from "drizzle-orm";
 
 export const proposalService = {
-  async create(data: { projectId: number; freelancerId: number; coverLetter: string }) {
+  async create(data: { projectId: number; freelancerId: number; coverLetter: string; proposedAmount: string }) {
     // Check for existing proposal from same freelancer on same project
     const [existing] = await db
       .select()
@@ -11,7 +12,8 @@ export const proposalService = {
       .where(
         and(
           eq(proposals.projectId, data.projectId),
-          eq(proposals.freelancerId, data.freelancerId)
+          eq(proposals.freelancerId, data.freelancerId),
+          inArray(proposals.status, ["pending", "accepted"])
         )
       );
 
@@ -31,6 +33,7 @@ export const proposalService = {
         projectId: proposals.projectId,
         freelancerId: proposals.freelancerId,
         coverLetter: proposals.coverLetter,
+        proposedAmount: proposals.proposedAmount,
         status: proposals.status,
         createdAt: proposals.createdAt,
         updatedAt: proposals.updatedAt,
@@ -63,6 +66,14 @@ export const proposalService = {
     const proposal = await this.getById(proposalId);
     if (!proposal) throw new Error("Proposal not found");
     if (proposal.status !== "pending") throw new Error("Proposal is not pending");
+    const project = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, proposal.projectId))
+      .then((rows) => rows[0] || null);
+    if (!project) throw new Error("Project not found");
+
+    const distributed = distributeProjectAmount(project, proposal.proposedAmount);
 
     // Accept this proposal
     await db
@@ -87,7 +98,11 @@ export const proposalService = {
     await db
       .update(projects)
       .set({ 
-        freelancerId: proposal.freelancerId, 
+        freelancerId: proposal.freelancerId,
+        milestone1Amount: distributed.milestone1Amount,
+        milestone2Amount: distributed.milestone2Amount,
+        milestone3Amount: distributed.milestone3Amount,
+        milestone4Amount: distributed.milestone4Amount,
         status: "active",
         updatedAt: new Date() 
       })

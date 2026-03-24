@@ -1,8 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, Filter, Search } from 'lucide-react';
 import * as Shared from '../shared';
-import { getCategories, getProjects, toAppJob } from '../lib/api';
+import { getCategories, getMyProposals, getProjects, toAppJob, type ApiProposal } from '../lib/api';
 import type { ApiCategory, AppJob } from '../types/job';
+
+const mapLatestProposalsByProject = (proposals: ApiProposal[]) => {
+  return proposals.reduce((accumulator, proposal) => {
+    const existing = accumulator[proposal.projectId];
+    if (!existing || proposal.id > existing.id) {
+      accumulator[proposal.projectId] = proposal;
+    }
+    return accumulator;
+  }, {} as Record<number, ApiProposal>);
+};
 
 export const ExploreJobsPage = () => {
   const { userRole } = Shared.useWallet();
@@ -14,25 +24,28 @@ export const ExploreJobsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [jobs, setJobs] = useState<AppJob[]>([]);
   const [categories, setCategories] = useState<ApiCategory[]>([]);
+  const [latestProposalsByProject, setLatestProposalsByProject] = useState<Record<number, ApiProposal>>({});
   const [expandedJobDescriptions, setExpandedJobDescriptions] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     const loadJobsData = async () => {
       try {
-        const [projectRows, categoryRows] = await Promise.all([
+        const [projectRows, categoryRows, myProposals] = await Promise.all([
           getProjects(),
           getCategories(),
+          userRole === 'freelancer' ? getMyProposals().catch(() => []) : Promise.resolve([]),
         ]);
 
         setJobs(projectRows.map(toAppJob));
         setCategories(categoryRows);
+        setLatestProposalsByProject(mapLatestProposalsByProject(myProposals));
       } catch (error) {
         console.error('Failed to load jobs page data:', error);
       }
     };
 
     loadJobsData();
-  }, []);
+  }, [userRole]);
 
   const categoryOptions = useMemo(() => {
     const base = [
@@ -72,6 +85,19 @@ export const ExploreJobsPage = () => {
   const handleApply = (job: AppJob) => {
     setSelectedJob(job);
     setIsApplyModalOpen(true);
+  };
+
+  const handleProposalSubmitted = async () => {
+    if (userRole !== 'freelancer') {
+      return;
+    }
+
+    try {
+      const myProposals = await getMyProposals();
+      setLatestProposalsByProject(mapLatestProposalsByProject(myProposals));
+    } catch (error) {
+      console.error('Failed to refresh proposal state:', error);
+    }
   };
 
   return (
@@ -122,7 +148,12 @@ export const ExploreJobsPage = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-6">
-          {visibleJobs.map((job) => (
+          {visibleJobs.map((job) => {
+            const latestProposal = latestProposalsByProject[job.id];
+            const isApplied = latestProposal?.status === 'pending' || latestProposal?.status === 'accepted';
+            const canReapply = latestProposal?.status === 'rejected' || latestProposal?.status === 'withdrawn';
+
+            return (
             <div key={job.id} className="card p-4 sm:p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sm:gap-6 group hover:border-accent-orange transition-all cursor-pointer">
               <div className="w-full min-w-0">
                 <h3 className="text-base sm:text-xl font-black mb-2 group-hover:text-accent-orange transition-colors">{job.title}</h3>
@@ -161,11 +192,21 @@ export const ExploreJobsPage = () => {
                 <p className={`text-xl sm:text-2xl font-black ${job.color}`}>{job.budget} {job.currency}</p>
                 <p className="text-[10px] font-bold text-muted uppercase mb-4">Budget</p>
                 {userRole !== 'client' && (
-                  <button onClick={() => handleApply(job)} className="btn-outline py-2 px-4 sm:px-6 text-xs w-full sm:w-auto justify-center">Apply Now</button>
+                  <button
+                    onClick={() => {
+                      if (!isApplied) {
+                        handleApply(job);
+                      }
+                    }}
+                    disabled={isApplied}
+                    className={`py-2 px-4 sm:px-6 text-xs w-full sm:w-auto justify-center ${isApplied ? 'btn-outline opacity-60 cursor-not-allowed' : canReapply ? 'btn-primary' : 'btn-outline'}`}
+                  >
+                    {isApplied ? 'Applied' : canReapply ? 'Re-Apply' : 'Apply Now'}
+                  </button>
                 )}
               </div>
             </div>
-          ))}
+          )})}
           {visibleJobs.length === 0 && (
             <div className="card p-6 text-sm text-muted">
               No jobs matched your current filters.
@@ -173,7 +214,7 @@ export const ExploreJobsPage = () => {
           )}
         </div>
       </div>
-      <Shared.JobApplyModal isOpen={isApplyModalOpen} onClose={() => setIsApplyModalOpen(false)} job={selectedJob} />
+      <Shared.JobApplyModal isOpen={isApplyModalOpen} onClose={() => setIsApplyModalOpen(false)} job={selectedJob} onSubmitted={handleProposalSubmitted} />
     </div>
   );
 };

@@ -7,6 +7,7 @@ import {
   acceptProposal,
   formatAddress,
   formatRelativeTime,
+  formatTokenAmount,
   getMyPostedProjects,
   getProject,
   getProjectProposals,
@@ -111,7 +112,7 @@ export const ReviewProposalsPage = () => {
 
     setProcessingProposalId(proposal.id);
     try {
-      const escrow = await createEscrowForProject(project, proposal.freelancerAddress);
+      const escrow = await createEscrowForProject(project, proposal.freelancerAddress, proposal.proposedAmount);
 
       if (proposal.status === 'pending') {
         await acceptProposal(proposal.id);
@@ -209,6 +210,12 @@ export const ReviewProposalsPage = () => {
                     </div>
                   </div>
                   <div className="bg-ink/5 rounded-[15px] p-4 mb-6">
+                    <div className="flex items-center justify-between gap-4 mb-3">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Proposed Amount</p>
+                      <p className="font-black text-lg text-accent-cyan">
+                        {formatTokenAmount(proposal.proposedAmount)} {project?.tokenType}
+                      </p>
+                    </div>
                     <p className="text-sm text-muted leading-relaxed">{proposal.coverLetter}</p>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">

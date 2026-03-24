@@ -1,4 +1,5 @@
 import { openContractCall } from '@stacks/connect';
+import { distributeProjectAmount } from '../../../shared/project-milestones';
 import {
   contractPrincipalCV,
   cvToJSON,
@@ -114,7 +115,11 @@ export async function getNextProjectOnChainId() {
   return readUintValue(result) + 1;
 }
 
-export async function createEscrowForProject(project: ApiProject, freelancerAddress: string) {
+export async function createEscrowForProject(
+  project: ApiProject,
+  freelancerAddress: string,
+  proposedAmount?: string | number | null,
+) {
   if (!isEscrowTokenType(project.tokenType)) {
     throw new Error(`Unsupported token type for escrow contract: ${project.tokenType}`);
   }
@@ -125,10 +130,18 @@ export async function createEscrowForProject(project: ApiProject, freelancerAddr
   }
 
   const onChainId = await getNextProjectOnChainId();
-  const milestone1 = toBaseUnits(project.milestone1Amount, project.tokenType);
-  const milestone2 = toBaseUnits(project.milestone2Amount, project.tokenType);
-  const milestone3 = toBaseUnits(project.milestone3Amount, project.tokenType);
-  const milestone4 = toBaseUnits(project.milestone4Amount, project.tokenType);
+  const distributed = proposedAmount != null
+    ? distributeProjectAmount(project, proposedAmount)
+    : {
+        milestone1Amount: project.milestone1Amount,
+        milestone2Amount: project.milestone2Amount,
+        milestone3Amount: project.milestone3Amount,
+        milestone4Amount: project.milestone4Amount,
+      };
+  const milestone1 = toBaseUnits(distributed.milestone1Amount, project.tokenType);
+  const milestone2 = toBaseUnits(distributed.milestone2Amount, project.tokenType);
+  const milestone3 = toBaseUnits(distributed.milestone3Amount, project.tokenType);
+  const milestone4 = toBaseUnits(distributed.milestone4Amount, project.tokenType);
   const total = milestone1 + milestone2 + milestone3 + milestone4;
 
   const functionArgs: any[] = [

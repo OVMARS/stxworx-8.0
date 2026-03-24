@@ -6,6 +6,7 @@ import { projectService } from "../services/project.service";
 const createProposalSchema = z.object({
   projectId: z.number().int(),
   coverLetter: z.string().min(1),
+  proposedAmount: z.string().regex(/^\d+(\.\d{1,8})?$/).refine((value) => Number(value) > 0),
 });
 
 export const proposalController = {
@@ -26,6 +27,7 @@ export const proposalController = {
         projectId: result.data.projectId,
         freelancerId: req.user!.id,
         coverLetter: result.data.coverLetter,
+        proposedAmount: result.data.proposedAmount,
       });
 
       return res.status(201).json(proposal);

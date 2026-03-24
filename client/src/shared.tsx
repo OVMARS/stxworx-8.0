@@ -803,7 +803,7 @@ export const PostJobModal = ({ isOpen, onClose, onCreated }: { isOpen: boolean, 
         </AnimatePresence>
       );
     };
-export const JobApplyModal = ({ isOpen, onClose, job }: { isOpen: boolean, onClose: () => void, job?: any }) => {
+export const JobApplyModal = ({ isOpen, onClose, job, onSubmitted }: { isOpen: boolean, onClose: () => void, job?: any, onSubmitted?: () => void | Promise<void> }) => {
       const [amount, setAmount] = useState(typeof job?.rawBudget === 'number' ? job.rawBudget : 1000);
       const [currency, setCurrency] = useState(job?.currency || 'STX');
       const [milestones, setMilestones] = useState(2);
@@ -845,16 +845,27 @@ export const JobApplyModal = ({ isOpen, onClose, job }: { isOpen: boolean, onClo
       const freelancerAmount = amount * 0.9;
 
       const handleSubmitProposal = async () => {
-        if (!job?.id || !coverLetter.trim()) {
+        if (!job?.id || !coverLetter.trim() || amount <= 0) {
           return;
         }
 
         setIsSubmitting(true);
         try {
+          const targetCurrency = job?.currency || currency;
+          const normalizedAmount = targetCurrency !== currency
+            ? await convertAmount(amount, currency, targetCurrency)
+            : amount;
+          const proposedAmount = normalizedAmount
+            .toFixed(targetCurrency === 'sBTC' ? 8 : targetCurrency === 'USDCx' ? 3 : 6)
+            .replace(/\.0+$/, '')
+            .replace(/(\.\d*?)0+$/, '$1');
+
           await createProposal({
             projectId: job.id,
             coverLetter: coverLetter.trim(),
+            proposedAmount,
           });
+          await onSubmitted?.();
           onClose();
         } catch (error) {
           console.error('Failed to create proposal:', error);
