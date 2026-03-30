@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, Bell, Globe, LayoutGrid, Users, BookOpen, Briefcase, Calendar, ShoppingBag, Newspaper,
@@ -13,16 +13,21 @@ import { GoogleGenAI } from '@google/genai';
 import * as Shared from '../shared';
 import {
   createSocialPostComment,
+  deleteSocialPost,
   formatAddress,
   formatRelativeTime,
   getLeaderboard,
   getProjects,
   getSocialFeed,
   getSocialPostComments,
+  getSocialPostPath,
+  getSocialPostShareUrl,
+  getUserProfilePath,
   toApiAssetUrl,
   toAppJob,
   toDisplayName,
   toggleSocialPostLike,
+  updateSocialPost,
   type ApiSocialComment,
   type ApiSocialPost,
 } from '../lib/api';
@@ -42,6 +47,11 @@ export const HomePage = () => {
   const [commentDrafts, setCommentDrafts] = useState<Record<number, string>>({});
   const [loadingComments, setLoadingComments] = useState<Record<number, boolean>>({});
   const [submittingComments, setSubmittingComments] = useState<Record<number, boolean>>({});
+  const [feedMenuPostId, setFeedMenuPostId] = useState<number | null>(null);
+  const [editingFeedPostId, setEditingFeedPostId] = useState<number | null>(null);
+  const [editingFeedPostContent, setEditingFeedPostContent] = useState('');
+  const [feedActionPostId, setFeedActionPostId] = useState<number | null>(null);
+  const [feedActionType, setFeedActionType] = useState<'edit' | 'delete' | null>(null);
 
   const canInteract = isSignedIn && Boolean(walletAddress);
 
@@ -183,6 +193,93 @@ export const HomePage = () => {
     }
   };
 
+  const handleCopyFeedPostLink = async (postId: number) => {
+    try {
+      if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+        throw new Error('Clipboard is not available in this browser.');
+      }
+
+      await navigator.clipboard.writeText(getSocialPostShareUrl(postId));
+    } catch (error) {
+      console.error('Failed to copy post link:', error);
+    }
+  };
+
+  const handleStartEditFeedPost = (post: ApiSocialPost) => {
+    setFeedMenuPostId(null);
+    setEditingFeedPostId(post.id);
+    setEditingFeedPostContent(post.content || '');
+  };
+
+  const handleCancelEditFeedPost = () => {
+    setFeedMenuPostId(null);
+    setEditingFeedPostId(null);
+    setEditingFeedPostContent('');
+  };
+
+  const handleSaveFeedPost = async (postId: number) => {
+    if (feedActionPostId !== null) {
+      return;
+    }
+
+    setFeedActionPostId(postId);
+    setFeedActionType('edit');
+    setFeedMenuPostId(null);
+
+    try {
+      const updated = await updateSocialPost(postId, { content: editingFeedPostContent });
+      setFeedPosts((current) => current.map((post) => (
+        post.id === postId ? updated : post
+      )));
+      setEditingFeedPostId(null);
+      setEditingFeedPostContent('');
+    } catch (error) {
+      console.error('Failed to update feed post:', error);
+    } finally {
+      setFeedActionPostId(null);
+      setFeedActionType(null);
+    }
+  };
+
+  const handleDeleteFeedPost = async (postId: number) => {
+    if (feedActionPostId !== null || !window.confirm('Delete this post?')) {
+      return;
+    }
+
+    setFeedActionPostId(postId);
+    setFeedActionType('delete');
+    setFeedMenuPostId(null);
+
+    try {
+      await deleteSocialPost(postId);
+      setFeedPosts((current) => current.filter((post) => post.id !== postId));
+      setFeedComments((current) => {
+        const next = { ...current };
+        delete next[postId];
+        return next;
+      });
+      setExpandedComments((current) => {
+        const next = { ...current };
+        delete next[postId];
+        return next;
+      });
+      setCommentDrafts((current) => {
+        const next = { ...current };
+        delete next[postId];
+        return next;
+      });
+      if (editingFeedPostId === postId) {
+        setEditingFeedPostId(null);
+        setEditingFeedPostContent('');
+      }
+    } catch (error) {
+      console.error('Failed to delete feed post:', error);
+    } finally {
+      setFeedActionPostId(null);
+      setFeedActionType(null);
+    }
+  };
+
   const completedJobs = topFreelancers.reduce((sum, freelancer) => sum + freelancer.jobsCompleted, 0);
   const averageRating =
     topFreelancers.length > 0
@@ -308,6 +405,10 @@ export const HomePage = () => {
             {feedPosts.map((post) => {
               const authorName = toDisplayName({ name: post.authorName, username: post.authorUsername, stxAddress: post.authorStxAddress });
               const avatarUrl = toApiAssetUrl(post.authorAvatar);
+              const authorProfilePath = getUserProfilePath({ username: post.authorUsername, stxAddress: post.authorStxAddress });
+              const postPath = getSocialPostPath(post.id);
+              const isOwnPost = Boolean(walletAddress && post.authorStxAddress && walletAddress.toLowerCase() === post.authorStxAddress.toLowerCase());
+              const isEditingPost = editingFeedPostId === post.id;
               const comments = feedComments[post.id] || [];
               const isCommentsOpen = Boolean(expandedComments[post.id]);
               const isLoadingPostComments = Boolean(loadingComments[post.id]);
@@ -325,14 +426,63 @@ export const HomePage = () => {
                       </div>
                     )}
                     <div>
-                      <h4 className="font-bold text-sm">{authorName}</h4>
+                      <Link to={authorProfilePath} className="font-bold text-sm hover:text-accent-orange transition-colors">{authorName}</Link>
                       <p className="text-xs text-muted">{formatRelativeTime(post.createdAt)}</p>
                     </div>
                   </div>
-                  <button className="text-muted hover:text-ink"><MoreHorizontal size={16} /></button>
+                  {isOwnPost ? (
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setFeedMenuPostId((current) => current === post.id ? null : post.id)}
+                        disabled={feedActionPostId === post.id}
+                        className="text-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <MoreHorizontal size={16} />
+                      </button>
+                      {feedMenuPostId === post.id ? (
+                        <div className="absolute right-0 top-full z-20 mt-2 w-36 overflow-hidden rounded-[15px] border border-border bg-surface shadow-xl">
+                          <button type="button" onClick={() => handleStartEditFeedPost(post)} className="flex w-full items-center gap-2 px-4 py-3 text-left text-xs font-bold text-muted transition-colors hover:bg-ink/5 hover:text-ink">
+                            <Edit2 size={14} />
+                            Edit
+                          </button>
+                          <button type="button" onClick={() => handleDeleteFeedPost(post.id)} className="flex w-full items-center gap-2 px-4 py-3 text-left text-xs font-bold text-muted transition-colors hover:bg-ink/5 hover:text-accent-red">
+                            <X size={14} />
+                            Delete
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
-                {post.content && <p className="text-sm mb-4">{post.content}</p>}
-                {post.imageUrl && <img src={toApiAssetUrl(post.imageUrl)} className="w-full rounded-[15px] mb-4 object-cover max-h-64" alt="Post content" referrerPolicy="no-referrer" />}
+                {isEditingPost ? (
+                  <div className="mb-4 space-y-3">
+                    <textarea
+                      value={editingFeedPostContent}
+                      onChange={(event) => setEditingFeedPostContent(event.target.value)}
+                      rows={4}
+                      className="w-full rounded-[15px] border border-border bg-ink/5 px-4 py-3 text-sm outline-none focus:border-accent-orange"
+                      placeholder={post.imageUrl ? 'Add a caption for your post' : 'Update your post'}
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <button type="button" onClick={handleCancelEditFeedPost} className="px-4 py-2 text-xs font-bold text-muted hover:text-ink transition-colors">Cancel</button>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveFeedPost(post.id)}
+                        disabled={feedActionPostId === post.id && feedActionType === 'edit'}
+                        className="btn-primary py-2 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {post.content && <p className="text-sm mb-4">{post.content}</p>}
+                    {post.imageUrl && <img src={toApiAssetUrl(post.imageUrl)} className="w-full rounded-[15px] mb-4 object-cover max-h-64" alt="Post content" referrerPolicy="no-referrer" />}
+                  </>
+                )}
+                {isEditingPost && post.imageUrl ? <img src={toApiAssetUrl(post.imageUrl)} className="w-full rounded-[15px] mb-4 object-cover max-h-64" alt="Post content" referrerPolicy="no-referrer" /> : null}
                 <div className="flex items-center gap-6 text-muted border-t border-border pt-4">
                   <button
                     onClick={() => handleToggleFeedLike(post.id)}
@@ -348,7 +498,14 @@ export const HomePage = () => {
                     <MessageCircle size={16} /> {post.commentsCount}
                   </button>
                   <button
-                    onClick={() => navigate(`/post/${post.id}`)}
+                    type="button"
+                    onClick={() => handleCopyFeedPostLink(post.id)}
+                    className="flex items-center gap-2 text-xs font-bold hover:text-accent-orange transition-colors"
+                  >
+                    <Share2 size={16} /> Share
+                  </button>
+                  <button
+                    onClick={() => navigate(postPath)}
                     className="flex items-center gap-2 text-xs font-bold hover:text-accent-orange transition-colors ml-auto"
                   >
                     <ArrowRight size={16} /> Open
@@ -395,6 +552,7 @@ export const HomePage = () => {
                         {comments.map((comment) => {
                           const commentAuthorName = toDisplayName({ name: comment.authorName, username: comment.authorUsername, stxAddress: comment.authorStxAddress });
                           const commentAvatarUrl = toApiAssetUrl(comment.authorAvatar);
+                          const commentAuthorProfilePath = getUserProfilePath({ username: comment.authorUsername, stxAddress: comment.authorStxAddress });
 
                           return (
                             <div key={comment.id} className="flex gap-3">
@@ -407,7 +565,7 @@ export const HomePage = () => {
                               )}
                               <div className="flex-1 bg-ink/5 rounded-[15px] p-4">
                                 <div className="flex justify-between items-start gap-4 mb-2">
-                                  <h4 className="font-bold text-sm">{commentAuthorName}</h4>
+                                  <Link to={commentAuthorProfilePath} className="font-bold text-sm hover:text-accent-orange transition-colors">{commentAuthorName}</Link>
                                   <span className="text-xs text-muted shrink-0">{formatRelativeTime(comment.createdAt)}</span>
                                 </div>
                                 <p className="text-sm">{comment.content}</p>

@@ -1,20 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { ChevronLeft, Heart, MessageCircle, MoreHorizontal } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ChevronLeft, Edit2, Heart, MessageCircle, MoreHorizontal, Share2, Trash2 } from 'lucide-react';
 import * as Shared from '../shared';
 import {
   createSocialPostComment,
+  deleteSocialPost,
   formatRelativeTime,
   getSocialPost,
   getSocialPostComments,
+  getSocialPostShareUrl,
+  getUserProfilePath,
   toggleSocialPostLike,
   toApiAssetUrl,
   toDisplayName,
+  updateSocialPost,
   type ApiSocialComment,
   type ApiSocialPost,
 } from '../lib/api';
 
 export const PostPage = () => {
+  const navigate = useNavigate();
   const { id } = useParams();
   const { isSignedIn, walletAddress } = Shared.useWallet();
   const [post, setPost] = useState<ApiSocialPost | null>(null);
@@ -23,15 +28,19 @@ export const PostPage = () => {
   const [loading, setLoading] = useState(true);
   const [submittingComment, setSubmittingComment] = useState(false);
   const [togglingLike, setTogglingLike] = useState(false);
+  const [postMenuOpen, setPostMenuOpen] = useState(false);
+  const [isEditingPost, setIsEditingPost] = useState(false);
+  const [editingPostContent, setEditingPostContent] = useState('');
+  const [postAction, setPostAction] = useState<'edit' | 'delete' | null>(null);
 
-  const postId = Number(id);
-  const isValidPostId = Number.isInteger(postId) && postId > 0;
+  const postPermalink = id?.trim() || '';
+  const isValidPostRoute = Boolean(postPermalink);
   const canInteract = isSignedIn && Boolean(walletAddress);
 
   useEffect(() => {
     let isMounted = true;
 
-    if (!isValidPostId) {
+    if (!isValidPostRoute) {
       setPost(null);
       setComments([]);
       setLoading(false);
@@ -43,8 +52,8 @@ export const PostPage = () => {
 
       try {
         const [postResponse, commentsResponse] = await Promise.all([
-          getSocialPost(postId),
-          getSocialPostComments(postId),
+          getSocialPost(postPermalink),
+          getSocialPostComments(postPermalink),
         ]);
 
         if (!isMounted) {
@@ -71,7 +80,7 @@ export const PostPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [isValidPostId, postId]);
+  }, [isValidPostRoute, postPermalink]);
 
   const handleToggleLike = async () => {
     if (!post || !canInteract || togglingLike) {
@@ -125,6 +134,76 @@ export const PostPage = () => {
     }
   };
 
+  const handleCopyPostLink = async () => {
+    if (!post) {
+      return;
+    }
+
+    try {
+      if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+        throw new Error('Clipboard is not available in this browser.');
+      }
+
+      await navigator.clipboard.writeText(getSocialPostShareUrl(post.id));
+    } catch (error) {
+      console.error('Failed to copy post link:', error);
+    }
+  };
+
+  const handleStartEditPost = () => {
+    if (!post) {
+      return;
+    }
+
+    setPostMenuOpen(false);
+    setIsEditingPost(true);
+    setEditingPostContent(post.content || '');
+  };
+
+  const handleCancelEditPost = () => {
+    setPostMenuOpen(false);
+    setIsEditingPost(false);
+    setEditingPostContent('');
+  };
+
+  const handleSavePost = async () => {
+    if (!post || postAction !== null) {
+      return;
+    }
+
+    setPostAction('edit');
+    setPostMenuOpen(false);
+
+    try {
+      const updated = await updateSocialPost(post.id, { content: editingPostContent });
+      setPost(updated);
+      setIsEditingPost(false);
+      setEditingPostContent('');
+    } catch (error) {
+      console.error('Failed to update post:', error);
+    } finally {
+      setPostAction(null);
+    }
+  };
+
+  const handleDeletePost = async () => {
+    if (!post || postAction !== null || !window.confirm('Delete this post?')) {
+      return;
+    }
+
+    setPostAction('delete');
+    setPostMenuOpen(false);
+
+    try {
+      await deleteSocialPost(post.id);
+      navigate('/profile');
+    } catch (error) {
+      console.error('Failed to delete post:', error);
+    } finally {
+      setPostAction(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="pt-28 pb-20 px-6 md:pl-[92px]">
@@ -154,6 +233,8 @@ export const PostPage = () => {
   const authorName = toDisplayName({ name: post.authorName, username: post.authorUsername, stxAddress: post.authorStxAddress });
   const avatarUrl = toApiAssetUrl(post.authorAvatar);
   const imageUrl = toApiAssetUrl(post.imageUrl);
+  const authorProfilePath = getUserProfilePath({ username: post.authorUsername, stxAddress: post.authorStxAddress });
+  const isOwnPost = Boolean(walletAddress && post.authorStxAddress && walletAddress.toLowerCase() === post.authorStxAddress.toLowerCase());
 
   return (
     <div className="pt-28 pb-20 px-6 md:pl-[92px]">
@@ -176,13 +257,59 @@ export const PostPage = () => {
                 </div>
               )}
               <div>
-                <h4 className="font-bold text-base">{authorName}</h4>
+                <Link to={authorProfilePath} className="font-bold text-base hover:text-accent-orange transition-colors">{authorName}</Link>
                 <p className="text-xs text-muted">{formatRelativeTime(post.createdAt)}</p>
               </div>
             </div>
-            <button className="text-muted hover:text-ink"><MoreHorizontal size={20} /></button>
+            {isOwnPost ? (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPostMenuOpen((current) => !current)}
+                  disabled={postAction !== null}
+                  className="text-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <MoreHorizontal size={20} />
+                </button>
+                {postMenuOpen ? (
+                  <div className="absolute right-0 top-full z-20 mt-2 w-36 overflow-hidden rounded-[15px] border border-border bg-surface shadow-xl">
+                    <button type="button" onClick={handleStartEditPost} className="flex w-full items-center gap-2 px-4 py-3 text-left text-xs font-bold text-muted transition-colors hover:bg-ink/5 hover:text-ink">
+                      <Edit2 size={14} />
+                      Edit
+                    </button>
+                    <button type="button" onClick={handleDeletePost} className="flex w-full items-center gap-2 px-4 py-3 text-left text-xs font-bold text-muted transition-colors hover:bg-ink/5 hover:text-accent-red">
+                      <Trash2 size={14} />
+                      Delete
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
-          {post.content && <p className="text-base mb-6 leading-relaxed">{post.content}</p>}
+          {isEditingPost ? (
+            <div className="mb-6 space-y-3">
+              <textarea
+                value={editingPostContent}
+                onChange={(event) => setEditingPostContent(event.target.value)}
+                rows={5}
+                className="w-full rounded-[15px] border border-border bg-ink/5 px-4 py-3 text-sm outline-none focus:border-accent-orange"
+                placeholder={post.imageUrl ? 'Add a caption for your post' : 'Update your post'}
+              />
+              <div className="flex items-center justify-end gap-2">
+                <button type="button" onClick={handleCancelEditPost} className="px-4 py-2 text-xs font-bold text-muted hover:text-ink transition-colors">Cancel</button>
+                <button
+                  type="button"
+                  onClick={handleSavePost}
+                  disabled={postAction === 'edit'}
+                  className="btn-primary py-2 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          ) : (
+            post.content ? <p className="text-base mb-6 leading-relaxed">{post.content}</p> : null
+          )}
           {imageUrl && (
             <img src={imageUrl} className="w-full rounded-[15px] mb-6 object-cover max-h-96" alt="Post content" referrerPolicy="no-referrer" />
           )}
@@ -197,6 +324,9 @@ export const PostPage = () => {
             <div className="flex items-center gap-2 text-sm font-bold text-accent-blue">
               <MessageCircle size={20} /> {post.commentsCount}
             </div>
+            <button type="button" onClick={handleCopyPostLink} className="flex items-center gap-2 text-sm font-bold hover:text-accent-orange transition-colors">
+              <Share2 size={20} /> Share
+            </button>
           </div>
         </div>
 
@@ -230,6 +360,7 @@ export const PostPage = () => {
             {comments.map((comment) => {
               const commentAuthorName = toDisplayName({ name: comment.authorName, username: comment.authorUsername, stxAddress: comment.authorStxAddress });
               const commentAvatarUrl = toApiAssetUrl(comment.authorAvatar);
+              const commentAuthorProfilePath = getUserProfilePath({ username: comment.authorUsername, stxAddress: comment.authorStxAddress });
 
               return (
                 <div key={comment.id} className="flex gap-3 sm:gap-4">
@@ -242,7 +373,7 @@ export const PostPage = () => {
                   )}
                   <div className="flex-1 bg-ink/5 rounded-[15px] p-4 min-w-0">
                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 gap-1 sm:gap-4">
-                      <h4 className="font-bold text-sm">{commentAuthorName}</h4>
+                      <Link to={commentAuthorProfilePath} className="font-bold text-sm hover:text-accent-orange transition-colors">{commentAuthorName}</Link>
                       <span className="text-xs text-muted shrink-0">{formatRelativeTime(comment.createdAt)}</span>
                     </div>
                     <p className="text-sm">{comment.content}</p>

@@ -7,7 +7,7 @@ import {
   Facebook, MoreHorizontal, ArrowRight, Filter, Trophy, ChevronLeft, ChevronsRight, ChevronDown,
   Wallet, Send, X, Settings, ShieldCheck, LogOut, Mail, Phone, MessageCircle, Sun, Moon, Maximize2, Minimize2,
   HelpCircle, AlertTriangle, Folder, GraduationCap, Home, PenTool, Camera, Edit2, Share, Shield, Upload, FileText,
-  Download, Sparkles, Bot, ZoomIn, ZoomOut
+  Download, Sparkles, Bot, ZoomIn, ZoomOut, Pin, Trash2
 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import * as Shared from '../shared';
@@ -15,13 +15,17 @@ import {
   acceptConnection,
   checkUsernameAvailability,
   createSocialPost,
+  deleteSocialPost,
   declineConnection,
   formatRelativeTime,
   formatTokenAmount,
   getConnectionSuggestions,
   getConnections,
   getMyBountyDashboard,
+  getSocialPostPath,
+  getSocialPostShareUrl,
   getSocialPosts,
+  getUserProfilePath,
   toDisplayName,
   toApiAssetUrl,
   getUserProfile,
@@ -30,7 +34,9 @@ import {
   getUserProjects,
   getUserReviews,
   requestConnection,
+  toggleSocialPostPin,
   toggleSocialPostLike,
+  updateSocialPost,
   updateMyProfile,
   type ApiBountyDashboard,
   type ApiConnection,
@@ -202,6 +208,18 @@ function fallbackCover() {
   return 'https://picsum.photos/seed/banner/1920/600';
 }
 
+function sortTimelinePosts(posts: ApiSocialPost[]) {
+  return [...posts].sort((left, right) => {
+    const pinDifference = Number(Boolean(right.isPinned)) - Number(Boolean(left.isPinned));
+
+    if (pinDifference !== 0) {
+      return pinDifference;
+    }
+
+    return new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime();
+  });
+}
+
 export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
   const { walletAddress, isSignedIn } = Shared.useWallet();
   const { walletAddressParam, profileIdentifier } = useParams<{ walletAddressParam?: string; profileIdentifier?: string }>();
@@ -340,7 +358,7 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
         setProfile(profileResponse);
         setProjects(projectResponse);
         setReviews(reviewResponse);
-        setTimelinePosts(socialResponse);
+        setTimelinePosts(sortTimelinePosts(socialResponse));
         setConnections(connectionResponse);
         setConnectionSuggestions(suggestionResponse);
         setBountyDashboard(bountyResponse);
@@ -402,6 +420,11 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
   const [newPostImageDataUrl, setNewPostImageDataUrl] = useState('');
   const [newPostImageName, setNewPostImageName] = useState('');
   const [isPostingTimeline, setIsPostingTimeline] = useState(false);
+  const [timelineMenuPostId, setTimelineMenuPostId] = useState<number | null>(null);
+  const [editingTimelinePostId, setEditingTimelinePostId] = useState<number | null>(null);
+  const [editingTimelinePostContent, setEditingTimelinePostContent] = useState('');
+  const [timelineActionPostId, setTimelineActionPostId] = useState<number | null>(null);
+  const [timelineActionType, setTimelineActionType] = useState<'edit' | 'delete' | 'pin' | null>(null);
 
   const handleAddExperience = () => {
     setExperiences([...experiences, { id: Date.now(), role: '', company: '', period: '', desc: '' }]);
@@ -584,10 +607,10 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
         content: newPostText.trim() || undefined,
         imageDataUrl: newPostImageDataUrl || undefined,
       });
-      setTimelinePosts((current) => [
+      setTimelinePosts((current) => sortTimelinePosts([
         created,
         ...current,
-      ]);
+      ]));
       setNewPostText('');
       clearTimelineImage();
       setGlobalError('');
@@ -618,6 +641,116 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
       );
     } catch (error) {
       setGlobalError(error instanceof Error ? error.message : 'Failed to update post like.');
+    }
+  };
+
+  const handleStartEditTimelinePost = (post: ApiSocialPost) => {
+    setTimelineMenuPostId(null);
+    setEditingTimelinePostId(post.id);
+    setEditingTimelinePostContent(post.content || '');
+    setGlobalError('');
+  };
+
+  const handleCancelEditTimelinePost = () => {
+    setTimelineMenuPostId(null);
+    setEditingTimelinePostId(null);
+    setEditingTimelinePostContent('');
+  };
+
+  const handleSaveTimelinePost = async (postId: number) => {
+    if (timelineActionPostId !== null) {
+      return;
+    }
+
+    setTimelineActionPostId(postId);
+    setTimelineActionType('edit');
+    setTimelineMenuPostId(null);
+
+    try {
+      const updated = await updateSocialPost(postId, { content: editingTimelinePostContent });
+      setTimelinePosts((current) => sortTimelinePosts(current.map((post) => (
+        post.id === postId ? updated : post
+      ))));
+      setEditingTimelinePostId(null);
+      setEditingTimelinePostContent('');
+      setGlobalError('');
+    } catch (error) {
+      setGlobalError(error instanceof Error ? error.message : 'Failed to update timeline post.');
+    } finally {
+      setTimelineActionPostId(null);
+      setTimelineActionType(null);
+    }
+  };
+
+  const handleDeleteTimelinePost = async (postId: number) => {
+    if (timelineActionPostId !== null || !window.confirm('Delete this post?')) {
+      return;
+    }
+
+    setTimelineActionPostId(postId);
+    setTimelineActionType('delete');
+    setTimelineMenuPostId(null);
+
+    try {
+      await deleteSocialPost(postId);
+      setTimelinePosts((current) => current.filter((post) => post.id !== postId));
+      if (editingTimelinePostId === postId) {
+        setEditingTimelinePostId(null);
+        setEditingTimelinePostContent('');
+      }
+      setGlobalError('');
+    } catch (error) {
+      setGlobalError(error instanceof Error ? error.message : 'Failed to delete timeline post.');
+    } finally {
+      setTimelineActionPostId(null);
+      setTimelineActionType(null);
+    }
+  };
+
+  const handleToggleTimelinePin = async (postId: number) => {
+    if (timelineActionPostId !== null) {
+      return;
+    }
+
+    setTimelineActionPostId(postId);
+    setTimelineActionType('pin');
+    setTimelineMenuPostId(null);
+
+    try {
+      const updated = await toggleSocialPostPin(postId);
+      setTimelinePosts((current) => sortTimelinePosts(current.map((post) => {
+        if (post.id === postId) {
+          return updated;
+        }
+
+        if (updated.isPinned) {
+          return {
+            ...post,
+            isPinned: false,
+          };
+        }
+
+        return post;
+      })));
+      setGlobalError('');
+    } catch (error) {
+      setGlobalError(error instanceof Error ? error.message : 'Failed to update pinned post.');
+    } finally {
+      setTimelineActionPostId(null);
+      setTimelineActionType(null);
+    }
+  };
+
+  const handleCopyTimelinePostLink = async (postId: number) => {
+    try {
+      if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+        throw new Error('Clipboard is not available in this browser.');
+      }
+
+      await navigator.clipboard.writeText(getSocialPostShareUrl(postId));
+      setGlobalError('');
+    } catch (error) {
+      setGlobalError(error instanceof Error ? error.message : 'Failed to copy post link.');
     }
   };
 
@@ -1423,31 +1556,98 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
                   </div>
                 )}
                 
-                {timelinePosts.map((post) => (
+                {timelinePosts.map((post) => {
+                  const authorProfilePath = getUserProfilePath({
+                    username: post.authorUsername,
+                    stxAddress: post.authorStxAddress,
+                  });
+                  const postPath = getSocialPostPath(post.id);
+
+                  return (
                   <div key={post.id} className="card p-6 hover:border-accent-orange transition-colors">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <img src={toApiAssetUrl(post.authorAvatar) || profileImage} className="w-10 h-10 rounded-[10px] object-cover" alt="Avatar" referrerPolicy="no-referrer" />
                         <div>
-                          <h4 className="font-bold text-sm">{post.authorName?.trim() || post.authorUsername?.trim() || displayName}</h4>
-                          <p className="text-xs text-muted">{formatRelativeTime(post.createdAt)}</p>
+                          <Link to={authorProfilePath} className="font-bold text-sm hover:text-accent-orange transition-colors">
+                            {post.authorName?.trim() || post.authorUsername?.trim() || displayName}
+                          </Link>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-muted">{formatRelativeTime(post.createdAt)}</p>
+                            {post.isPinned ? <span className="rounded-full border border-accent-orange/40 bg-accent-orange/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-orange">Pinned</span> : null}
+                          </div>
                         </div>
                       </div>
-                      <button className="text-muted hover:text-ink"><MoreHorizontal size={16} /></button>
-                    </div>
-                    <Link to={`/post/${post.id}`} className="block group">
-                      {post.content && <p className="text-sm mb-4 group-hover:text-accent-orange transition-colors">{post.content}</p>}
-                      {post.imageUrl && (
-                        <img src={toApiAssetUrl(post.imageUrl)} className="w-full rounded-[15px] mb-4 object-cover max-h-64" alt="Post content" referrerPolicy="no-referrer" />
+                      {isOwnProfile ? (
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setTimelineMenuPostId((current) => current === post.id ? null : post.id)}
+                            disabled={timelineActionPostId === post.id}
+                            className="text-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <MoreHorizontal size={16} />
+                          </button>
+                          {timelineMenuPostId === post.id ? (
+                            <div className="absolute right-0 top-full z-20 mt-2 w-36 overflow-hidden rounded-[15px] border border-border bg-surface shadow-xl">
+                              <button type="button" onClick={() => handleToggleTimelinePin(post.id)} className="flex w-full items-center gap-2 px-4 py-3 text-left text-xs font-bold text-muted transition-colors hover:bg-ink/5 hover:text-ink">
+                                <Pin size={14} />
+                                {post.isPinned ? 'Unpin' : 'Pin'}
+                              </button>
+                              <button type="button" onClick={() => handleStartEditTimelinePost(post)} className="flex w-full items-center gap-2 px-4 py-3 text-left text-xs font-bold text-muted transition-colors hover:bg-ink/5 hover:text-ink">
+                                <Edit2 size={14} />
+                                Edit
+                              </button>
+                              <button type="button" onClick={() => handleDeleteTimelinePost(post.id)} className="flex w-full items-center gap-2 px-4 py-3 text-left text-xs font-bold text-muted transition-colors hover:bg-ink/5 hover:text-accent-red">
+                                <Trash2 size={14} />
+                                Delete
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <button className="text-muted hover:text-ink"><MoreHorizontal size={16} /></button>
                       )}
-                    </Link>
+                    </div>
+                    {editingTimelinePostId === post.id ? (
+                      <div className="mb-4 space-y-3">
+                        <textarea
+                          value={editingTimelinePostContent}
+                          onChange={(event) => setEditingTimelinePostContent(event.target.value)}
+                          rows={4}
+                          className="w-full rounded-[15px] border border-border bg-ink/5 px-4 py-3 text-sm outline-none focus:border-accent-orange"
+                          placeholder={post.imageUrl ? 'Add a caption for your post' : 'Update your post'}
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <button type="button" onClick={handleCancelEditTimelinePost} className="px-4 py-2 text-xs font-bold text-muted hover:text-ink transition-colors">Cancel</button>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveTimelinePost(post.id)}
+                            disabled={timelineActionPostId === post.id && timelineActionType === 'edit'}
+                            className="btn-primary py-2 px-4 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Link to={postPath} className="block group">
+                        {post.content && <p className="text-sm mb-4 group-hover:text-accent-orange transition-colors">{post.content}</p>}
+                        {post.imageUrl && (
+                          <img src={toApiAssetUrl(post.imageUrl)} className="w-full rounded-[15px] mb-4 object-cover max-h-64" alt="Post content" referrerPolicy="no-referrer" />
+                        )}
+                      </Link>
+                    )}
+                    {editingTimelinePostId === post.id && post.imageUrl ? (
+                      <img src={toApiAssetUrl(post.imageUrl)} className="w-full rounded-[15px] mb-4 object-cover max-h-64" alt="Post content" referrerPolicy="no-referrer" />
+                    ) : null}
                     <div className="flex items-center gap-6 text-muted border-t border-border pt-4">
                       <button onClick={() => handleToggleTimelineLike(post.id)} className={`flex items-center gap-2 text-xs font-bold transition-colors ${post.likedByViewer ? 'text-accent-red' : 'hover:text-accent-red'}`}><Heart size={16} /> {post.likesCount}</button>
-                      <Link to={`/post/${post.id}`} className="flex items-center gap-2 text-xs font-bold hover:text-accent-blue transition-colors"><MessageCircle size={16} /> {post.commentsCount}</Link>
-                      <button className="flex items-center gap-2 text-xs font-bold hover:text-accent-orange transition-colors ml-auto"><Share2 size={16} /> Share</button>
+                      <Link to={postPath} className="flex items-center gap-2 text-xs font-bold hover:text-accent-blue transition-colors"><MessageCircle size={16} /> {post.commentsCount}</Link>
+                      <button type="button" onClick={() => handleCopyTimelinePostLink(post.id)} className="flex items-center gap-2 text-xs font-bold hover:text-accent-orange transition-colors ml-auto"><Share2 size={16} /> Share</button>
                     </div>
                   </div>
-                ))}
+                )})}
                 {timelinePosts.length === 0 && (
                   <div className="card p-6 text-sm text-muted">No timeline posts yet.</div>
                 )}

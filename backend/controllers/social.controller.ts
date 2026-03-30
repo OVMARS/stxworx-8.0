@@ -19,6 +19,10 @@ const createPostSchema = z
     path: ["content"],
   });
 
+const updatePostSchema = z.object({
+  content: z.string().max(4000),
+});
+
  const createCommentSchema = z.object({
    content: z.string().trim().min(1).max(2000),
  });
@@ -96,6 +100,84 @@ export const socialController = {
       return res.status(201).json(created);
     } catch (error) {
       console.error("Create post error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  },
+
+  async update(req: Request, res: Response) {
+    try {
+      const postIdResult = postIdSchema.safeParse(req.params.id);
+      if (!postIdResult.success) {
+        return res.status(400).json({ message: "Invalid post ID" });
+      }
+
+      const bodyResult = updatePostSchema.safeParse(req.body);
+      if (!bodyResult.success) {
+        return res.status(400).json({ message: "Validation error", errors: bodyResult.error.errors });
+      }
+
+      const updated = await socialService.update(postIdResult.data, req.user!.id, bodyResult.data.content);
+      if (updated === null) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+
+      if (updated === false) {
+        return res.status(403).json({ message: "You can only edit your own posts" });
+      }
+
+      return res.status(200).json(updated);
+    } catch (error) {
+      if (error instanceof Error && error.message === "Post content or image is required") {
+        return res.status(400).json({ message: error.message });
+      }
+
+      console.error("Update post error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  },
+
+  async remove(req: Request, res: Response) {
+    try {
+      const postIdResult = postIdSchema.safeParse(req.params.id);
+      if (!postIdResult.success) {
+        return res.status(400).json({ message: "Invalid post ID" });
+      }
+
+      const removed = await socialService.remove(postIdResult.data, req.user!.id);
+      if (removed === null) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+
+      if (removed === false) {
+        return res.status(403).json({ message: "You can only delete your own posts" });
+      }
+
+      return res.status(200).json({ success: true });
+    } catch (error) {
+      console.error("Delete post error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  },
+
+  async togglePin(req: Request, res: Response) {
+    try {
+      const postIdResult = postIdSchema.safeParse(req.params.id);
+      if (!postIdResult.success) {
+        return res.status(400).json({ message: "Invalid post ID" });
+      }
+
+      const updated = await socialService.togglePin(postIdResult.data, req.user!.id);
+      if (updated === null) {
+        return res.status(404).json({ message: "Post not found" });
+      }
+
+      if (updated === false) {
+        return res.status(403).json({ message: "You can only pin your own posts" });
+      }
+
+      return res.status(200).json(updated);
+    } catch (error) {
+      console.error("Toggle pin error:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   },

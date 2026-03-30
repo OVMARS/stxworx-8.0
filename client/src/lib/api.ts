@@ -1,6 +1,7 @@
 import type { ApiLeaderboardEntry } from '../types/leaderboard';
 import type { ApiCategory, ApiProject, AppJob, AppJobMilestone } from '../types/job';
 import type { AuthenticatedUserResponse, ApiUserProfile, ApiUserReview, ApiUsernameAvailability, UserRole } from '../types/user';
+import { decodeSocialPostId, encodeSocialPostId } from '@shared/social-post-permalink';
 import { retryResponseWithX402Payment } from './x402';
 
 // Re-export types for convenience
@@ -10,6 +11,7 @@ const rawBase = (import.meta.env.VITE_API_BASE_URL || '/api').trim();
 const API_BASE_URL = rawBase.endsWith('/api')
   ? rawBase.replace(/\/$/, '')
   : `${rawBase.replace(/\/$/, '')}/api`;
+const CANONICAL_WEB_ORIGIN = 'https://stxworx.com';
 
 type RequestOptions = RequestInit & {
   searchParams?: Record<string, string | number | undefined | null>;
@@ -322,6 +324,7 @@ export interface ApiSocialPost {
   userId: number;
   content: string;
   imageUrl?: string | null;
+  isPinned?: boolean;
   authorStxAddress?: string | null;
   authorName?: string | null;
   authorUsername?: string | null;
@@ -467,6 +470,42 @@ export function toHandle(
   }
 
   return `@${formatAddress(user.stxAddress).replace(/\.\.\./g, '_')}`;
+}
+
+export function getUserProfilePath(
+  user?: DisplayableIdentity | null,
+) {
+  if (!user) {
+    return '/profile';
+  }
+
+  if (user.username?.trim()) {
+    return `/profile/${encodeURIComponent(user.username.trim().toLowerCase())}`;
+  }
+
+  if (user.stxAddress?.trim()) {
+    return `/profile/w/${encodeURIComponent(user.stxAddress.trim())}`;
+  }
+
+  return '/profile';
+}
+
+export function resolveSocialPostId(postIdOrPermalink: number | string) {
+  if (typeof postIdOrPermalink === 'number') {
+    return Number.isInteger(postIdOrPermalink) && postIdOrPermalink > 0 ? postIdOrPermalink : null;
+  }
+
+  return decodeSocialPostId(postIdOrPermalink);
+}
+
+export function getSocialPostPath(postId: number) {
+  return `/post/${encodeSocialPostId(postId)}`;
+}
+
+export function getSocialPostShareUrl(postId: number) {
+  const path = getSocialPostPath(postId);
+
+  return new URL(path, CANONICAL_WEB_ORIGIN).toString();
 }
 
 export function toApiAssetUrl(value?: string | null) {
@@ -894,11 +933,21 @@ export async function getSocialFeed(limit?: number) {
   });
 }
 
-export async function getSocialPost(postId: number) {
+export async function getSocialPost(postIdOrPermalink: number | string) {
+  const postId = resolveSocialPostId(postIdOrPermalink);
+  if (!postId) {
+    throw new Error('Invalid post URL');
+  }
+
   return apiRequest<ApiSocialPost>(`/social/posts/${postId}`, { method: 'GET' });
 }
 
-export async function getSocialPostComments(postId: number) {
+export async function getSocialPostComments(postIdOrPermalink: number | string) {
+  const postId = resolveSocialPostId(postIdOrPermalink);
+  if (!postId) {
+    throw new Error('Invalid post URL');
+  }
+
   return apiRequest<ApiSocialComment[]>(`/social/posts/${postId}/comments`, { method: 'GET' });
 }
 
@@ -906,6 +955,25 @@ export async function createSocialPost(input: { content?: string; imageDataUrl?:
   return apiRequest<ApiSocialPost>('/social/posts', {
     method: 'POST',
     body: JSON.stringify(input),
+  });
+}
+
+export async function updateSocialPost(postId: number, input: { content: string }) {
+  return apiRequest<ApiSocialPost>(`/social/posts/${postId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function deleteSocialPost(postId: number) {
+  return apiRequest<{ success: boolean }>(`/social/posts/${postId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function toggleSocialPostPin(postId: number) {
+  return apiRequest<ApiSocialPost>(`/social/posts/${postId}/pin`, {
+    method: 'PATCH',
   });
 }
 

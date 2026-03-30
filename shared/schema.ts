@@ -346,6 +346,7 @@ export const socialPosts = mysqlTable("social_posts", {
     .notNull(),
   content: text("content").notNull(),
   imageUrl: varchar("image_url", { length: 500 }),
+  isPinned: boolean("is_pinned").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

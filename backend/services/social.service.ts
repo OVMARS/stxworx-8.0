@@ -7,6 +7,7 @@ type SocialPostRecord = {
   userId: number;
   content: string;
   imageUrl: string | null;
+  isPinned: boolean;
   createdAt: Date;
   updatedAt: Date;
   authorStxAddress: string | null;
@@ -34,6 +35,7 @@ async function getPostRecord(postId: number): Promise<SocialPostRecord | null> {
       userId: socialPosts.userId,
       content: socialPosts.content,
       imageUrl: socialPosts.imageUrl,
+      isPinned: socialPosts.isPinned,
       createdAt: socialPosts.createdAt,
       updatedAt: socialPosts.updatedAt,
       authorStxAddress: users.stxAddress,
@@ -84,6 +86,7 @@ export const socialService = {
         userId: socialPosts.userId,
         content: socialPosts.content,
         imageUrl: socialPosts.imageUrl,
+        isPinned: socialPosts.isPinned,
         createdAt: socialPosts.createdAt,
         updatedAt: socialPosts.updatedAt,
         authorStxAddress: users.stxAddress,
@@ -116,6 +119,7 @@ export const socialService = {
         userId: socialPosts.userId,
         content: socialPosts.content,
         imageUrl: socialPosts.imageUrl,
+        isPinned: socialPosts.isPinned,
         createdAt: socialPosts.createdAt,
         updatedAt: socialPosts.updatedAt,
         authorStxAddress: users.stxAddress,
@@ -126,7 +130,7 @@ export const socialService = {
       .from(socialPosts)
       .leftJoin(users, eq(socialPosts.userId, users.id))
       .where(eq(socialPosts.userId, userId))
-      .orderBy(desc(socialPosts.createdAt));
+      .orderBy(desc(socialPosts.isPinned), desc(socialPosts.createdAt));
 
     return enrichPosts(posts, viewerId);
   },
@@ -144,6 +148,7 @@ export const socialService = {
         userId: socialPosts.userId,
         content: socialPosts.content,
         imageUrl: socialPosts.imageUrl,
+        isPinned: socialPosts.isPinned,
         createdAt: socialPosts.createdAt,
         updatedAt: socialPosts.updatedAt,
         authorStxAddress: users.stxAddress,
@@ -161,6 +166,82 @@ export const socialService = {
 
     const [enriched] = await enrichPosts([created], userId);
     return enriched || null;
+  },
+
+  async update(postId: number, userId: number, content: string) {
+    const post = await getPostRecord(postId);
+    if (!post) {
+      return null;
+    }
+
+    if (post.userId !== userId) {
+      return false;
+    }
+
+    const trimmedContent = content.trim();
+    if (!trimmedContent && !post.imageUrl) {
+      throw new Error("Post content or image is required");
+    }
+
+    await db
+      .update(socialPosts)
+      .set({
+        content: trimmedContent,
+        updatedAt: new Date(),
+      })
+      .where(eq(socialPosts.id, postId));
+
+    return this.getById(postId, userId);
+  },
+
+  async remove(postId: number, userId: number) {
+    const post = await getPostRecord(postId);
+    if (!post) {
+      return null;
+    }
+
+    if (post.userId !== userId) {
+      return false;
+    }
+
+    await db.delete(postLikes).where(eq(postLikes.postId, postId));
+    await db.delete(postComments).where(eq(postComments.postId, postId));
+    await db.delete(socialPosts).where(eq(socialPosts.id, postId));
+
+    return true;
+  },
+
+  async togglePin(postId: number, userId: number) {
+    const post = await getPostRecord(postId);
+    if (!post) {
+      return null;
+    }
+
+    if (post.userId !== userId) {
+      return false;
+    }
+
+    const nextPinned = !post.isPinned;
+
+    if (nextPinned) {
+      await db
+        .update(socialPosts)
+        .set({
+          isPinned: false,
+          updatedAt: new Date(),
+        })
+        .where(eq(socialPosts.userId, userId));
+    }
+
+    await db
+      .update(socialPosts)
+      .set({
+        isPinned: nextPinned,
+        updatedAt: new Date(),
+      })
+      .where(eq(socialPosts.id, postId));
+
+    return this.getById(postId, userId);
   },
 
   async toggleLike(postId: number, userId: number) {
