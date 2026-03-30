@@ -118,6 +118,82 @@ function imageToDataUrl(file: File) {
   });
 }
 
+const MAX_PROFILE_MEDIA_DATA_URL_LENGTH = 190000;
+const PROFILE_MEDIA_DIMENSIONS: Record<'profile' | 'cover', number> = {
+  profile: 512,
+  cover: 1600,
+};
+const PROFILE_MEDIA_SCALE_STEPS = [1, 0.9, 0.8, 0.7, 0.6, 0.5];
+const PROFILE_MEDIA_QUALITY_STEPS = [0.92, 0.86, 0.8, 0.74, 0.68, 0.62, 0.56, 0.5, 0.44];
+
+function loadImageElement(file: File) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Failed to load image file'));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+async function optimizeProfileMedia(file: File, type: 'profile' | 'cover') {
+  if (file.type === 'image/gif') {
+    const dataUrl = await imageToDataUrl(file);
+    if (dataUrl.length <= MAX_PROFILE_MEDIA_DATA_URL_LENGTH) {
+      return dataUrl;
+    }
+
+    throw new Error('Selected image is too large. Please choose a smaller image.');
+  }
+
+  const image = await loadImageElement(file);
+  const sourceWidth = image.naturalWidth || image.width;
+  const sourceHeight = image.naturalHeight || image.height;
+
+  if (!sourceWidth || !sourceHeight) {
+    throw new Error('Failed to read image dimensions.');
+  }
+
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    throw new Error('Image processing is not supported in this browser.');
+  }
+
+  const maxDimension = PROFILE_MEDIA_DIMENSIONS[type];
+  const baseScale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
+
+  for (const scaleStep of PROFILE_MEDIA_SCALE_STEPS) {
+    const scale = baseScale * scaleStep;
+    const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
+    const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    context.clearRect(0, 0, targetWidth, targetHeight);
+    context.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+    for (const quality of PROFILE_MEDIA_QUALITY_STEPS) {
+      const dataUrl = canvas.toDataURL('image/webp', quality);
+      if (dataUrl.length <= MAX_PROFILE_MEDIA_DATA_URL_LENGTH) {
+        return dataUrl;
+      }
+    }
+  }
+
+  throw new Error('Selected image is too large. Please choose a smaller image.');
+}
+
 function fallbackAvatar(role: UserRole | null | undefined) {
   return role === 'client' ? 'https://picsum.photos/seed/client/300/300' : 'https://picsum.photos/seed/elodie/300/300';
 }
@@ -182,7 +258,7 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
     setImageToEdit(type);
     setPendingImage(type === 'profile' ? profileImage : coverImage);
     setImageZoom(1);
-    setIsImageModalOpen(true);
+    imageUploadInputRef.current?.click();
   };
 
   const closeImageEditor = () => {
@@ -451,15 +527,26 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
     }
 
     try {
-      const dataUrl = await imageToDataUrl(file);
+      if (!imageToEdit) {
+        return;
+      }
+
+      const dataUrl = await optimizeProfileMedia(file, imageToEdit);
       if (!dataUrl) {
         return;
       }
-      setPendingImage(dataUrl);
-      setImageZoom(1);
+
+      if (imageToEdit === 'profile') {
+        setProfileImage(dataUrl);
+      } else {
+        setCoverImage(dataUrl);
+      }
+
       setGlobalError('');
+      closeImageEditor();
     } catch (error) {
       setGlobalError(error instanceof Error ? error.message : 'Failed to read image file');
+      closeImageEditor();
     }
   };
 
@@ -723,6 +810,7 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
           onClose={() => setIsMessageModalOpen(false)} 
           recipientAddress={recipientAddress}
         />  
+        <input ref={imageUploadInputRef} type="file" accept="image/*" className="hidden" onChange={handleModalUploadChange} />
         
         {/* Image Editor Modal */}
         <AnimatePresence>
