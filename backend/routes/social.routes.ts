@@ -5,6 +5,7 @@ import { socialController } from "../controllers/social.controller";
 export const socialRoutes = Router();
 
 socialRoutes.get("/feed", optionalAuth, socialController.feed);
+socialRoutes.get("/posts", optionalAuth, socialController.list);
 socialRoutes.get("/posts/:id", optionalAuth, socialController.getById);
 socialRoutes.get("/posts/:id/comments", optionalAuth, socialController.listComments);
 socialRoutes.get("/:address/posts", optionalAuth, socialController.listByAddress);

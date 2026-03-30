@@ -7,6 +7,14 @@ import { saveSocialPostImage } from "../services/social-image.service";
    limit: z.coerce.number().int().min(1).max(20).optional(),
  });
 
+ const postsQuerySchema = z.object({
+   query: z.string().trim().max(100).optional(),
+   tag: z.string().trim().max(60).optional(),
+   sort: z.enum(["recent", "oldest", "likes", "views"]).optional(),
+   range: z.enum(["all", "week", "month", "year"]).optional(),
+   limit: z.coerce.number().int().min(1).max(100).optional(),
+ });
+
  const postIdSchema = z.coerce.number().int().positive();
 
 const createPostSchema = z
@@ -43,6 +51,21 @@ export const socialController = {
     }
   },
 
+  async list(req: Request, res: Response) {
+    try {
+      const query = postsQuerySchema.safeParse(req.query);
+      if (!query.success) {
+        return res.status(400).json({ message: "Validation error", errors: query.error.errors });
+      }
+
+      const posts = await socialService.listPosts(req.user?.id, query.data);
+      return res.status(200).json(posts);
+    } catch (error) {
+      console.error("List social posts error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  },
+
   async getById(req: Request, res: Response) {
     try {
       const result = postIdSchema.safeParse(req.params.id);
@@ -50,7 +73,10 @@ export const socialController = {
         return res.status(400).json({ message: "Invalid post ID" });
       }
 
-      const post = await socialService.getById(result.data, req.user?.id);
+      const post = await socialService.getById(result.data, req.user?.id, {
+        recordView: true,
+        visitorKey: req.ip || null,
+      });
       if (!post) {
         return res.status(404).json({ message: "Post not found" });
       }

@@ -331,10 +331,25 @@ export interface ApiSocialPost {
   authorAvatar?: string | null;
   likesCount: number;
   commentsCount: number;
+  viewsCount: number;
   likedByViewer: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
+
+export type SocialPostSortOption = 'recent' | 'oldest' | 'likes' | 'views';
+
+export type SocialPostRangeOption = 'all' | 'week' | 'month' | 'year';
+
+export type SocialPostsQuery = {
+  query?: string;
+  tag?: string;
+  sort?: SocialPostSortOption;
+  range?: SocialPostRangeOption;
+  limit?: number;
+};
+
+export type ApiMentionableUser = Pick<ApiUserProfile, 'id' | 'stxAddress' | 'name' | 'username' | 'role' | 'isActive' | 'specialty' | 'avatar'>;
 
 export interface ApiReputationNft {
   id: number;
@@ -500,6 +515,29 @@ export function resolveSocialPostId(postIdOrPermalink: number | string) {
 
 export function getSocialPostPath(postId: number) {
   return `/post/${encodeSocialPostId(postId)}`;
+}
+
+export function getSocialPostsPagePath(query?: SocialPostsQuery) {
+  const searchParams = new URLSearchParams();
+
+  if (query?.query?.trim()) {
+    searchParams.set('query', query.query.trim());
+  }
+
+  if (query?.tag?.trim()) {
+    searchParams.set('tag', query.tag.trim().replace(/^#/, ''));
+  }
+
+  if (query?.sort) {
+    searchParams.set('sort', query.sort);
+  }
+
+  if (query?.range) {
+    searchParams.set('range', query.range);
+  }
+
+  const suffix = searchParams.toString();
+  return suffix ? `/posts?${suffix}` : '/posts';
 }
 
 export function getSocialPostShareUrl(postId: number) {
@@ -706,6 +744,13 @@ export async function getUserProfile(address: string) {
 
 export async function getUserProfileByUsername(username: string) {
   return apiRequest<ApiUserProfile>(`/users/username/${encodeURIComponent(username)}`, { method: 'GET' });
+}
+
+export async function searchUsersByUsername(query?: string, limit?: number) {
+  return apiRequest<ApiMentionableUser[]>('/users/search', {
+    method: 'GET',
+    searchParams: { query, limit },
+  });
 }
 
 export async function getUserProjects(address: string) {
@@ -930,6 +975,19 @@ export async function getSocialFeed(limit?: number) {
   return apiRequest<ApiSocialPost[]>('/social/feed', {
     method: 'GET',
     searchParams: { limit },
+  });
+}
+
+export async function getSocialPostsDirectory(query?: SocialPostsQuery) {
+  return apiRequest<ApiSocialPost[]>('/social/posts', {
+    method: 'GET',
+    searchParams: {
+      query: query?.query,
+      tag: query?.tag,
+      sort: query?.sort,
+      range: query?.range,
+      limit: query?.limit,
+    },
   });
 }
 

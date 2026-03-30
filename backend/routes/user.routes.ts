@@ -6,6 +6,7 @@ export const userRoutes = Router();
 
 // Public
 userRoutes.get("/leaderboard", userController.getLeaderboard);
+userRoutes.get("/search", optionalAuth, userController.search);
 userRoutes.get("/username-availability", optionalAuth, userController.checkUsernameAvailability);
 userRoutes.get("/username/:username", userController.getByUsername);
 userRoutes.get("/:address", userController.getByAddress);

@@ -82,6 +82,7 @@ import { ClientDashboard } from "./pages/client/ClientDashboard";
 import { FreelancerDashboard } from "./pages/freelancer/FreelancerDashboard";
 import { ProfilePage } from "./pages/ProfilePage";
 import { PostPage as SocialPostPage } from "./pages/PostPage";
+import { PostsPage } from "./pages/PostsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { ProPlanPage } from "./pages/ProPlanPage";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
@@ -537,6 +538,16 @@ export default function App() {
                       transition={{ duration: 0.3 }}
                     >
                       <SocialPostPage />
+                    </motion.div>
+                  } />
+                  <Route path="/posts" element={
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <PostsPage />
                     </motion.div>
                   } />
                   <Route path="/profile" element={

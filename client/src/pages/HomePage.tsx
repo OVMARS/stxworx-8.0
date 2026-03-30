@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import * as Shared from '../shared';
+import { PostComposerInput } from '../components/social/PostComposerInput';
+import { PostText } from '../components/social/PostText';
 import {
   createSocialPostComment,
   deleteSocialPost,
@@ -21,6 +23,7 @@ import {
   getSocialFeed,
   getSocialPostComments,
   getSocialPostPath,
+  getSocialPostsPagePath,
   getSocialPostShareUrl,
   getUserProfilePath,
   toApiAssetUrl,
@@ -397,7 +400,7 @@ export const HomePage = () => {
         <section className="mb-20">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl font-black">Main Feed</h2>
-            <button onClick={() => navigate('/profile')} className="text-accent-orange text-sm font-bold flex items-center gap-2">
+            <button onClick={() => navigate(getSocialPostsPagePath())} className="text-accent-orange text-sm font-bold flex items-center gap-2">
               View All <ChevronRight size={16} />
             </button>
           </div>
@@ -457,9 +460,9 @@ export const HomePage = () => {
                 </div>
                 {isEditingPost ? (
                   <div className="mb-4 space-y-3">
-                    <textarea
+                    <PostComposerInput
                       value={editingFeedPostContent}
-                      onChange={(event) => setEditingFeedPostContent(event.target.value)}
+                      onChange={setEditingFeedPostContent}
                       rows={4}
                       className="w-full rounded-[15px] border border-border bg-ink/5 px-4 py-3 text-sm outline-none focus:border-accent-orange"
                       placeholder={post.imageUrl ? 'Add a caption for your post' : 'Update your post'}
@@ -478,7 +481,7 @@ export const HomePage = () => {
                   </div>
                 ) : (
                   <>
-                    {post.content && <p className="text-sm mb-4">{post.content}</p>}
+                    {post.content ? <PostText content={post.content} className="text-sm mb-4" /> : null}
                     {post.imageUrl && <img src={toApiAssetUrl(post.imageUrl)} className="w-full rounded-[15px] mb-4 object-cover max-h-64" alt="Post content" referrerPolicy="no-referrer" />}
                   </>
                 )}

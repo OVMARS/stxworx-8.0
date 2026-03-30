@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import * as Shared from '../shared';
+import { PostComposerInput } from '../components/social/PostComposerInput';
+import { PostText } from '../components/social/PostText';
 import {
   acceptConnection,
   checkUsernameAvailability,
@@ -1511,17 +1513,17 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
               <div className="space-y-6">
                 {isOwnProfile && (
                   <div className="card p-4 space-y-4">
-                    <div className="flex gap-4 items-center">
+                    <div className="flex gap-4 items-start">
                       <div className="w-10 h-10 rounded-[10px] bg-ink/10 shrink-0 overflow-hidden">
                         <img src={toApiAssetUrl(profileImage)} className="w-full h-full object-cover" alt="Avatar" referrerPolicy="no-referrer" />
                       </div>
-                      <input 
-                        type="text" 
+                      <PostComposerInput
                         value={newPostText}
-                        onChange={(e) => setNewPostText(e.target.value)}
-                        placeholder="What's on your mind?" 
-                        className="w-full bg-transparent border-none focus:ring-0 text-sm outline-none" 
-                        onKeyDown={(e) => e.key === 'Enter' && handlePostTimeline()}
+                        onChange={setNewPostText}
+                        onSubmit={handlePostTimeline}
+                        rows={3}
+                        placeholder="What's on your mind?"
+                        className="w-full rounded-[15px] border border-border bg-ink/5 px-4 py-3 text-sm outline-none focus:border-accent-orange resize-none"
                       />
                       <button onClick={handlePostTimeline} disabled={isPostingTimeline || (!newPostText.trim() && !newPostImageDataUrl)} className="btn-primary py-2 px-4 shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"><Send size={16} /></button>
                     </div>
@@ -1611,9 +1613,9 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
                     </div>
                     {editingTimelinePostId === post.id ? (
                       <div className="mb-4 space-y-3">
-                        <textarea
+                        <PostComposerInput
                           value={editingTimelinePostContent}
-                          onChange={(event) => setEditingTimelinePostContent(event.target.value)}
+                          onChange={setEditingTimelinePostContent}
                           rows={4}
                           className="w-full rounded-[15px] border border-border bg-ink/5 px-4 py-3 text-sm outline-none focus:border-accent-orange"
                           placeholder={post.imageUrl ? 'Add a caption for your post' : 'Update your post'}
@@ -1631,12 +1633,14 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
                         </div>
                       </div>
                     ) : (
-                      <Link to={postPath} className="block group">
-                        {post.content && <p className="text-sm mb-4 group-hover:text-accent-orange transition-colors">{post.content}</p>}
-                        {post.imageUrl && (
-                          <img src={toApiAssetUrl(post.imageUrl)} className="w-full rounded-[15px] mb-4 object-cover max-h-64" alt="Post content" referrerPolicy="no-referrer" />
-                        )}
-                      </Link>
+                      <div className="block group">
+                        {post.content ? <PostText content={post.content} className="text-sm mb-4 group-hover:text-accent-orange transition-colors" /> : null}
+                        {post.imageUrl ? (
+                          <Link to={postPath} className="block">
+                            <img src={toApiAssetUrl(post.imageUrl)} className="w-full rounded-[15px] mb-4 object-cover max-h-64" alt="Post content" referrerPolicy="no-referrer" />
+                          </Link>
+                        ) : null}
+                      </div>
                     )}
                     {editingTimelinePostId === post.id && post.imageUrl ? (
                       <img src={toApiAssetUrl(post.imageUrl)} className="w-full rounded-[15px] mb-4 object-cover max-h-64" alt="Post content" referrerPolicy="no-referrer" />

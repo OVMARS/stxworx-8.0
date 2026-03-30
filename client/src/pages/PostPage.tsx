@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Edit2, Heart, MessageCircle, MoreHorizontal, Share2, Trash2 } from 'lucide-react';
 import * as Shared from '../shared';
+import { PostComposerInput } from '../components/social/PostComposerInput';
+import { PostText } from '../components/social/PostText';
 import {
   createSocialPostComment,
   deleteSocialPost,
@@ -288,9 +290,9 @@ export const PostPage = () => {
           </div>
           {isEditingPost ? (
             <div className="mb-6 space-y-3">
-              <textarea
+              <PostComposerInput
                 value={editingPostContent}
-                onChange={(event) => setEditingPostContent(event.target.value)}
+                onChange={setEditingPostContent}
                 rows={5}
                 className="w-full rounded-[15px] border border-border bg-ink/5 px-4 py-3 text-sm outline-none focus:border-accent-orange"
                 placeholder={post.imageUrl ? 'Add a caption for your post' : 'Update your post'}
@@ -308,7 +310,7 @@ export const PostPage = () => {
               </div>
             </div>
           ) : (
-            post.content ? <p className="text-base mb-6 leading-relaxed">{post.content}</p> : null
+            post.content ? <PostText content={post.content} className="text-base mb-6 leading-relaxed" /> : null
           )}
           {imageUrl && (
             <img src={imageUrl} className="w-full rounded-[15px] mb-6 object-cover max-h-96" alt="Post content" referrerPolicy="no-referrer" />

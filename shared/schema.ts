@@ -374,6 +374,17 @@ export const postComments = mysqlTable("post_comments", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const postViews = mysqlTable("post_views", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  postId: bigint("post_id", { mode: "number", unsigned: true })
+    .references(() => socialPosts.id)
+    .notNull(),
+  userId: bigint("user_id", { mode: "number", unsigned: true })
+    .references(() => users.id),
+  visitorKey: varchar("visitor_key", { length: 64 }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export const userConnections = mysqlTable("user_connections", {
   id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
   requesterId: bigint("requester_id", { mode: "number", unsigned: true })

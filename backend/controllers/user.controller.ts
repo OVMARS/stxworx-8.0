@@ -2,7 +2,7 @@ import { type Request, type Response } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { users, reviews, projects } from "@shared/schema";
-import { eq, sql, and, count, avg, ne } from "drizzle-orm";
+import { eq, sql, and, count, avg, ne, isNotNull } from "drizzle-orm";
 import { projectService } from "../services/project.service";
 import { saveUploadedImage } from "../services/social-image.service";
 
@@ -15,6 +15,11 @@ const usernameSchema = z
 
 const usernameAvailabilitySchema = z.object({
   username: usernameSchema,
+});
+
+const userSearchSchema = z.object({
+  query: z.string().trim().max(30).regex(/^[a-zA-Z0-9_]*$/, "Query can only contain letters, numbers, and underscores").optional(),
+  limit: z.coerce.number().int().min(1).max(10).optional(),
 });
 
 const updateProfileSchema = z.object({
@@ -72,6 +77,30 @@ function normalizeStringArray(values?: string[]) {
 async function findProfileByAddress(address: string) {
   const [user] = await db.select(publicProfileSelection).from(users).where(eq(users.stxAddress, address));
   return user;
+}
+
+async function searchProfilesByUsername(query?: string, limit = 8) {
+  const normalizedQuery = normalizeUsername(query || "");
+
+  return db
+    .select({
+      id: users.id,
+      stxAddress: users.stxAddress,
+      username: users.username,
+      name: users.name,
+      role: users.role,
+      isActive: users.isActive,
+      specialty: users.specialty,
+      avatar: users.avatar,
+    })
+    .from(users)
+    .where(
+      normalizedQuery
+        ? and(isNotNull(users.username), sql`lower(${users.username}) like ${`${normalizedQuery}%`}`)
+        : isNotNull(users.username)
+    )
+    .orderBy(sql`lower(${users.username}) asc`)
+    .limit(limit);
 }
 
 async function findProfileByUsername(username: string) {
@@ -153,6 +182,21 @@ export const userController = {
       return res.status(200).json(user);
     } catch (error) {
       console.error("Get user by address error:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  },
+
+  async search(req: Request, res: Response) {
+    try {
+      const result = userSearchSchema.safeParse(req.query);
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid search query", errors: result.error.errors });
+      }
+
+      const users = await searchProfilesByUsername(result.data.query, result.data.limit ?? 8);
+      return res.status(200).json(users);
+    } catch (error) {
+      console.error("Search users error:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   },

@@ -1,6 +1,6 @@
 import { db } from "../db";
-import { postComments, postLikes, socialPosts, users } from "@shared/schema";
-import { and, desc, eq } from "drizzle-orm";
+import { postComments, postLikes, postViews, socialPosts, users } from "@shared/schema";
+import { and, asc, desc, eq, gte, isNotNull, or, sql } from "drizzle-orm";
 
 type SocialPostRecord = {
   id: number;
@@ -16,6 +16,31 @@ type SocialPostRecord = {
   authorAvatar: string | null;
 };
 
+type SocialPostSort = "recent" | "oldest" | "likes" | "views";
+type SocialPostRange = "all" | "week" | "month" | "year";
+
+type SocialPostListFilters = {
+  query?: string;
+  tag?: string;
+  sort?: SocialPostSort;
+  range?: SocialPostRange;
+  limit?: number;
+};
+
+const socialPostSelection = {
+  id: socialPosts.id,
+  userId: socialPosts.userId,
+  content: socialPosts.content,
+  imageUrl: socialPosts.imageUrl,
+  isPinned: socialPosts.isPinned,
+  createdAt: socialPosts.createdAt,
+  updatedAt: socialPosts.updatedAt,
+  authorStxAddress: users.stxAddress,
+  authorName: users.name,
+  authorUsername: users.username,
+  authorAvatar: users.avatar,
+};
+
 type SocialCommentRecord = {
   id: number;
   postId: number;
@@ -28,21 +53,90 @@ type SocialCommentRecord = {
   authorAvatar: string | null;
 };
 
+function normalizeSearchValue(value?: string) {
+  return value?.trim().toLowerCase() || "";
+}
+
+function normalizeHashtag(value?: string) {
+  return value?.trim().replace(/^#/, "").toLowerCase() || "";
+}
+
+function extractHashtags(content: string) {
+  return Array.from(content.matchAll(/#([a-z0-9_]+)/gi), (match) => match[1].toLowerCase());
+}
+
+function getRangeStart(range?: SocialPostRange) {
+  const now = new Date();
+
+  if (range === "week") {
+    return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  }
+
+  if (range === "month") {
+    const next = new Date(now);
+    next.setMonth(now.getMonth() - 1);
+    return next;
+  }
+
+  if (range === "year") {
+    const next = new Date(now);
+    next.setFullYear(now.getFullYear() - 1);
+    return next;
+  }
+
+  return null;
+}
+
+function isMissingPostViewsTableError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return message.includes("post_views") && (message.includes("doesn't exist") || message.includes("no such table"));
+}
+
+function sortPosts<T extends { createdAt: Date; likesCount: number; viewsCount: number }>(posts: T[], sort: SocialPostSort) {
+  const next = [...posts];
+
+  next.sort((left, right) => {
+    if (sort === "oldest") {
+      return left.createdAt.getTime() - right.createdAt.getTime();
+    }
+
+    if (sort === "likes") {
+      if (right.likesCount !== left.likesCount) {
+        return right.likesCount - left.likesCount;
+      }
+
+      if (right.viewsCount !== left.viewsCount) {
+        return right.viewsCount - left.viewsCount;
+      }
+
+      return right.createdAt.getTime() - left.createdAt.getTime();
+    }
+
+    if (sort === "views") {
+      if (right.viewsCount !== left.viewsCount) {
+        return right.viewsCount - left.viewsCount;
+      }
+
+      if (right.likesCount !== left.likesCount) {
+        return right.likesCount - left.likesCount;
+      }
+
+      return right.createdAt.getTime() - left.createdAt.getTime();
+    }
+
+    return right.createdAt.getTime() - left.createdAt.getTime();
+  });
+
+  return next;
+}
+
 async function getPostRecord(postId: number): Promise<SocialPostRecord | null> {
   const [post] = await db
-    .select({
-      id: socialPosts.id,
-      userId: socialPosts.userId,
-      content: socialPosts.content,
-      imageUrl: socialPosts.imageUrl,
-      isPinned: socialPosts.isPinned,
-      createdAt: socialPosts.createdAt,
-      updatedAt: socialPosts.updatedAt,
-      authorStxAddress: users.stxAddress,
-      authorName: users.name,
-      authorUsername: users.username,
-      authorAvatar: users.avatar,
-    })
+    .select(socialPostSelection)
     .from(socialPosts)
     .leftJoin(users, eq(socialPosts.userId, users.id))
     .where(eq(socialPosts.id, postId));
@@ -59,19 +153,50 @@ async function postExists(postId: number) {
   return Boolean(post);
 }
 
+async function recordView(postId: number, viewerId?: number, visitorKey?: string | null) {
+  try {
+    await db.insert(postViews).values({
+      postId,
+      userId: viewerId ?? null,
+      visitorKey: visitorKey || null,
+    });
+  } catch (error) {
+    if (!isMissingPostViewsTableError(error)) {
+      throw error;
+    }
+  }
+}
+
+async function listPostViews(postId: number) {
+  try {
+    return await db.select({ id: postViews.id }).from(postViews).where(eq(postViews.postId, postId));
+  } catch (error) {
+    if (isMissingPostViewsTableError(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
 async function enrichPosts(posts: SocialPostRecord[], viewerId?: number) {
   return Promise.all(
     posts.map(async (post) => {
-      const [likes, comments] = await Promise.all([
+      const [likes, comments, views, viewerLike] = await Promise.all([
         db.select({ id: postLikes.id, userId: postLikes.userId }).from(postLikes).where(eq(postLikes.postId, post.id)),
         db.select({ id: postComments.id }).from(postComments).where(eq(postComments.postId, post.id)),
+        listPostViews(post.id),
+        viewerId
+          ? db.select({ id: postLikes.id }).from(postLikes).where(and(eq(postLikes.postId, post.id), eq(postLikes.userId, viewerId)))
+          : Promise.resolve([]),
       ]);
-      const likedByViewer = viewerId ? likes.some((like) => like.userId === viewerId) : false;
+      const likedByViewer = viewerId ? viewerLike.length > 0 : false;
 
       return {
         ...post,
         likesCount: likes.length,
         commentsCount: comments.length,
+        viewsCount: views.length,
         likedByViewer,
       };
     }),
@@ -81,19 +206,7 @@ async function enrichPosts(posts: SocialPostRecord[], viewerId?: number) {
 export const socialService = {
   async getFeed(viewerId?: number, limit = 12) {
     const posts = await db
-      .select({
-        id: socialPosts.id,
-        userId: socialPosts.userId,
-        content: socialPosts.content,
-        imageUrl: socialPosts.imageUrl,
-        isPinned: socialPosts.isPinned,
-        createdAt: socialPosts.createdAt,
-        updatedAt: socialPosts.updatedAt,
-        authorStxAddress: users.stxAddress,
-        authorName: users.name,
-        authorUsername: users.username,
-        authorAvatar: users.avatar,
-      })
+      .select(socialPostSelection)
       .from(socialPosts)
       .leftJoin(users, eq(socialPosts.userId, users.id))
       .orderBy(desc(socialPosts.createdAt))
@@ -102,10 +215,51 @@ export const socialService = {
     return enrichPosts(posts, viewerId);
   },
 
-  async getById(postId: number, viewerId?: number) {
+  async listPosts(viewerId: number | undefined, filters: SocialPostListFilters = {}) {
+    const normalizedQuery = normalizeSearchValue(filters.query);
+    const normalizedTag = normalizeHashtag(filters.tag || (normalizedQuery.startsWith("#") ? normalizedQuery : ""));
+    const rangeStart = getRangeStart(filters.range);
+    const clauses = [];
+
+    if (rangeStart) {
+      clauses.push(gte(socialPosts.createdAt, rangeStart));
+    }
+
+    if (normalizedQuery && !normalizedQuery.startsWith("#")) {
+      clauses.push(
+        or(
+          sql`lower(${socialPosts.content}) like ${`%${normalizedQuery}%`}`,
+          sql`lower(coalesce(${users.username}, '')) like ${`%${normalizedQuery}%`}`,
+          sql`lower(coalesce(${users.name}, '')) like ${`%${normalizedQuery}%`}`
+        )
+      );
+    }
+
+    const whereClause = clauses.length === 0 ? undefined : clauses.length === 1 ? clauses[0] : and(...clauses);
+    const posts = await db
+      .select(socialPostSelection)
+      .from(socialPosts)
+      .leftJoin(users, eq(socialPosts.userId, users.id))
+      .where(whereClause)
+      .orderBy(desc(socialPosts.createdAt));
+
+    const filteredPosts = normalizedTag
+      ? posts.filter((post) => extractHashtags(post.content).includes(normalizedTag))
+      : posts;
+
+    const enriched = await enrichPosts(filteredPosts, viewerId);
+    const sorted = sortPosts(enriched, filters.sort || "recent");
+    return sorted.slice(0, filters.limit ?? 100);
+  },
+
+  async getById(postId: number, viewerId?: number, options?: { recordView?: boolean; visitorKey?: string | null }) {
     const post = await getPostRecord(postId);
     if (!post) {
       return null;
+    }
+
+    if (options?.recordView) {
+      await recordView(postId, viewerId, options.visitorKey);
     }
 
     const [enriched] = await enrichPosts([post], viewerId);
@@ -114,19 +268,7 @@ export const socialService = {
 
   async getByUserId(userId: number, viewerId?: number) {
     const posts = await db
-      .select({
-        id: socialPosts.id,
-        userId: socialPosts.userId,
-        content: socialPosts.content,
-        imageUrl: socialPosts.imageUrl,
-        isPinned: socialPosts.isPinned,
-        createdAt: socialPosts.createdAt,
-        updatedAt: socialPosts.updatedAt,
-        authorStxAddress: users.stxAddress,
-        authorName: users.name,
-        authorUsername: users.username,
-        authorAvatar: users.avatar,
-      })
+      .select(socialPostSelection)
       .from(socialPosts)
       .leftJoin(users, eq(socialPosts.userId, users.id))
       .where(eq(socialPosts.userId, userId))
@@ -143,19 +285,7 @@ export const socialService = {
     });
 
     const [created] = await db
-      .select({
-        id: socialPosts.id,
-        userId: socialPosts.userId,
-        content: socialPosts.content,
-        imageUrl: socialPosts.imageUrl,
-        isPinned: socialPosts.isPinned,
-        createdAt: socialPosts.createdAt,
-        updatedAt: socialPosts.updatedAt,
-        authorStxAddress: users.stxAddress,
-        authorName: users.name,
-        authorUsername: users.username,
-        authorAvatar: users.avatar,
-      })
+      .select(socialPostSelection)
       .from(socialPosts)
       .leftJoin(users, eq(socialPosts.userId, users.id))
       .where(eq(socialPosts.id, result.insertId));
@@ -206,6 +336,13 @@ export const socialService = {
 
     await db.delete(postLikes).where(eq(postLikes.postId, postId));
     await db.delete(postComments).where(eq(postComments.postId, postId));
+    try {
+      await db.delete(postViews).where(eq(postViews.postId, postId));
+    } catch (error) {
+      if (!isMissingPostViewsTableError(error)) {
+        throw error;
+      }
+    }
     await db.delete(socialPosts).where(eq(socialPosts.id, postId));
 
     return true;
