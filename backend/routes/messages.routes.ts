@@ -9,3 +9,6 @@ messagesRoutes.get("/unread-count", requireAuth, messagesController.unreadCount)
 messagesRoutes.post("/conversations", requireAuth, messagesController.startConversation);
 messagesRoutes.get("/conversations/:id/messages", requireAuth, messagesController.getMessages);
 messagesRoutes.post("/conversations/:id/messages", requireAuth, messagesController.sendMessage);
+messagesRoutes.patch("/conversations/:id/messages/:messageId", requireAuth, messagesController.updateMessage);
+messagesRoutes.delete("/conversations/:id/messages/:messageId", requireAuth, messagesController.deleteMessage);
+messagesRoutes.patch("/conversations/:id/messages/:messageId/pin", requireAuth, messagesController.pinMessage);

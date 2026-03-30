@@ -27,6 +27,14 @@ const sendMessageSchema = z.object({
   }
 });
 
+const updateMessageSchema = z.object({
+  body: z.string().max(4000),
+});
+
+const pinMessageSchema = z.object({
+  isPinned: z.boolean(),
+});
+
 export const messagesController = {
   async listConversations(req: Request, res: Response) {
     try {
@@ -104,6 +112,70 @@ export const messagesController = {
     } catch (error) {
       console.error("Send message error:", error);
       return res.status(400).json({ message: error instanceof Error ? error.message : "Unable to send message" });
+    }
+  },
+
+  async updateMessage(req: Request, res: Response) {
+    try {
+      const conversationId = parseInt(req.params.id);
+      const messageId = parseInt(req.params.messageId);
+      if (isNaN(conversationId) || isNaN(messageId)) {
+        return res.status(400).json({ message: "Invalid message request" });
+      }
+
+      const result = updateMessageSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({
+          message: result.error.errors[0]?.message || "Validation error",
+          errors: result.error.errors,
+        });
+      }
+
+      const message = await messagesService.updateMessage(conversationId, messageId, req.user!.id, result.data.body);
+      return res.status(200).json(message);
+    } catch (error) {
+      console.error("Update message error:", error);
+      return res.status(400).json({ message: error instanceof Error ? error.message : "Unable to update message" });
+    }
+  },
+
+  async deleteMessage(req: Request, res: Response) {
+    try {
+      const conversationId = parseInt(req.params.id);
+      const messageId = parseInt(req.params.messageId);
+      if (isNaN(conversationId) || isNaN(messageId)) {
+        return res.status(400).json({ message: "Invalid message request" });
+      }
+
+      const message = await messagesService.deleteMessage(conversationId, messageId, req.user!.id);
+      return res.status(200).json(message);
+    } catch (error) {
+      console.error("Delete message error:", error);
+      return res.status(400).json({ message: error instanceof Error ? error.message : "Unable to delete message" });
+    }
+  },
+
+  async pinMessage(req: Request, res: Response) {
+    try {
+      const conversationId = parseInt(req.params.id);
+      const messageId = parseInt(req.params.messageId);
+      if (isNaN(conversationId) || isNaN(messageId)) {
+        return res.status(400).json({ message: "Invalid message request" });
+      }
+
+      const result = pinMessageSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({
+          message: result.error.errors[0]?.message || "Validation error",
+          errors: result.error.errors,
+        });
+      }
+
+      const message = await messagesService.setPinned(conversationId, messageId, req.user!.id, result.data.isPinned);
+      return res.status(200).json(message);
+    } catch (error) {
+      console.error("Pin message error:", error);
+      return res.status(400).json({ message: error instanceof Error ? error.message : "Unable to pin message" });
     }
   },
 };

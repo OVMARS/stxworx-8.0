@@ -1,18 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, Loader2, MessageCircle, MoreHorizontal, Plus, Search, Send, X } from 'lucide-react';
+import { Check, ChevronLeft, Loader2, MessageCircle, MoreHorizontal, Pencil, Pin, Plus, Search, Send, Trash2, X } from 'lucide-react';
 import {
+  deleteConversationMessage,
   formatAddress,
   formatRelativeTime,
   getConnections,
   getConversationMessages,
   getConversations,
   getCurrentUser,
+  getUserProfilePath,
+  pinConversationMessage,
   searchUsersByUsername,
   sendConversationMessage,
   startConversation,
   toApiAssetUrl,
   toDisplayName,
+  updateConversationMessage,
   type ApiConnection,
   type ApiConversationAttachmentInput,
   type ApiConversation,
@@ -58,7 +62,11 @@ function dedupeCandidates(users: ChatCandidate[]) {
   return Array.from(map.values());
 }
 
-function buildConversationPreview(message: Pick<ApiConversationMessage, 'body' | 'attachmentName' | 'attachmentMimeType'>) {
+function buildConversationPreview(message: Pick<ApiConversationMessage, 'body' | 'attachmentName' | 'attachmentMimeType' | 'isDeleted'>) {
+  if (message.isDeleted) {
+    return 'Message deleted';
+  }
+
   const body = message.body?.trim();
   if (body) {
     return body;
@@ -113,6 +121,11 @@ export const MessagesPage = () => {
   const [newChatError, setNewChatError] = useState('');
   const [composerError, setComposerError] = useState('');
   const [pendingAttachment, setPendingAttachment] = useState<ApiConversationAttachmentInput | null>(null);
+  const [messageActionError, setMessageActionError] = useState('');
+  const [messageActionId, setMessageActionId] = useState<number | null>(null);
+  const [openMessageMenuId, setOpenMessageMenuId] = useState<number | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
+  const [editingMessageBody, setEditingMessageBody] = useState('');
   const [startingConversationId, setStartingConversationId] = useState<number | null>(null);
   const handledRequestedUserRef = useRef('');
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
@@ -221,6 +234,10 @@ export const MessagesPage = () => {
   useEffect(() => {
     if (!selectedChat) {
       setMessages([]);
+      setOpenMessageMenuId(null);
+      setEditingMessageId(null);
+      setEditingMessageBody('');
+      setMessageActionError('');
       return;
     }
 
@@ -230,6 +247,14 @@ export const MessagesPage = () => {
 
     loadMessages(selectedChat);
   }, [loadMessages, searchParams, selectedChat, syncSearchParams]);
+
+  const applyMessageUpdate = useCallback((updatedMessage: ApiConversationMessage | null) => {
+    if (!updatedMessage) {
+      return;
+    }
+
+    setMessages((current) => current.map((entry) => (entry.id === updatedMessage.id ? updatedMessage : entry)));
+  }, []);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -417,6 +442,95 @@ export const MessagesPage = () => {
     }
   };
 
+  const handleStartEditMessage = (entry: ApiConversationMessage) => {
+    setOpenMessageMenuId(null);
+    setEditingMessageId(entry.id);
+    setEditingMessageBody(entry.body || '');
+    setMessageActionError('');
+  };
+
+  const handleCancelEditMessage = () => {
+    setEditingMessageId(null);
+    setEditingMessageBody('');
+    setMessageActionError('');
+  };
+
+  const refreshConversationList = useCallback(async () => {
+    try {
+      const refreshed = await getConversations();
+      setConversations(refreshed);
+    } catch (error) {
+      console.error('Failed to refresh conversations:', error);
+    }
+  }, []);
+
+  const handleSaveEditedMessage = async (entry: ApiConversationMessage) => {
+    if (!selectedChat) {
+      return;
+    }
+
+    if (!editingMessageBody.trim() && !entry.attachmentUrl) {
+      setMessageActionError('A text message cannot be empty.');
+      return;
+    }
+
+    setMessageActionId(entry.id);
+    setMessageActionError('');
+    try {
+      const updated = await updateConversationMessage(selectedChat, entry.id, editingMessageBody);
+      applyMessageUpdate(updated);
+      setEditingMessageId(null);
+      setEditingMessageBody('');
+      await refreshConversationList();
+    } catch (error) {
+      setMessageActionError(error instanceof Error ? error.message : 'Failed to update message.');
+    } finally {
+      setMessageActionId(null);
+    }
+  };
+
+  const handleDeleteMessage = async (entry: ApiConversationMessage) => {
+    if (!selectedChat || !window.confirm('Delete this message?')) {
+      return;
+    }
+
+    setMessageActionId(entry.id);
+    setOpenMessageMenuId(null);
+    setMessageActionError('');
+    try {
+      const updated = await deleteConversationMessage(selectedChat, entry.id);
+      applyMessageUpdate(updated);
+      if (editingMessageId === entry.id) {
+        setEditingMessageId(null);
+        setEditingMessageBody('');
+      }
+      await refreshConversationList();
+    } catch (error) {
+      setMessageActionError(error instanceof Error ? error.message : 'Failed to delete message.');
+    } finally {
+      setMessageActionId(null);
+    }
+  };
+
+  const handleTogglePinnedMessage = async (entry: ApiConversationMessage) => {
+    if (!selectedChat) {
+      return;
+    }
+
+    setMessageActionId(entry.id);
+    setOpenMessageMenuId(null);
+    setMessageActionError('');
+    try {
+      const updated = await pinConversationMessage(selectedChat, entry.id, !entry.isPinned);
+      applyMessageUpdate(updated);
+      await refreshConversationList();
+    } catch (error) {
+      setMessageActionError(error instanceof Error ? error.message : 'Failed to update pinned state.');
+    } finally {
+      setMessageActionId(null);
+    }
+  };
+
   const handleSend = async () => {
     if (!selectedChat || (!message.trim() && !pendingAttachment)) {
       return;
@@ -570,21 +684,28 @@ export const MessagesPage = () => {
                       <div className="space-y-2 max-h-44 overflow-y-auto no-scrollbar pr-1">
                         {filteredConnections.map((candidate) => {
                           const isStarting = startingConversationId === candidate.id;
+                          const candidateProfilePath = getUserProfilePath(candidate);
                           return (
-                            <button
+                            <div
                               key={`connection-${candidate.id}`}
-                              type="button"
-                              onClick={() => handleStartConversation(candidate)}
-                              disabled={isStarting}
-                              className="w-full rounded-[12px] border border-border bg-surface px-3 py-2.5 flex items-center gap-3 text-left hover:bg-ink/5 transition-colors disabled:opacity-60"
+                              className="w-full rounded-[12px] border border-border bg-surface px-3 py-2.5 flex items-center gap-3 text-left hover:bg-ink/5 transition-colors"
                             >
-                              {renderAvatar(candidate, 'w-10 h-10 rounded-[10px] shrink-0', 'bg-accent-orange/15 text-accent-orange flex items-center justify-center font-black')}
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-bold truncate">{toDisplayName(candidate)}</p>
-                                <p className="text-[10px] text-muted uppercase tracking-widest truncate">{candidate.username ? `@${candidate.username}` : formatAddress(candidate.stxAddress)}</p>
-                              </div>
-                              {isStarting ? <Loader2 size={14} className="animate-spin text-muted shrink-0" /> : null}
-                            </button>
+                              <Link to={candidateProfilePath} className="flex min-w-0 flex-1 items-center gap-3">
+                                {renderAvatar(candidate, 'w-10 h-10 rounded-[10px] shrink-0', 'bg-accent-orange/15 text-accent-orange flex items-center justify-center font-black')}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-bold truncate hover:text-accent-orange transition-colors">{toDisplayName(candidate)}</p>
+                                  <p className="text-[10px] text-muted uppercase tracking-widest truncate hover:text-accent-orange transition-colors">{candidate.username ? `@${candidate.username}` : formatAddress(candidate.stxAddress)}</p>
+                                </div>
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => handleStartConversation(candidate)}
+                                disabled={isStarting}
+                                className="rounded-[10px] border border-border px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-ink hover:text-bg transition-colors disabled:opacity-60 shrink-0"
+                              >
+                                {isStarting ? <Loader2 size={14} className="animate-spin text-muted shrink-0" /> : 'Chat'}
+                              </button>
+                            </div>
                           );
                         })}
                       </div>
@@ -597,21 +718,28 @@ export const MessagesPage = () => {
                       <div className="space-y-2 max-h-44 overflow-y-auto no-scrollbar pr-1">
                         {visibleSearchResults.map((candidate) => {
                           const isStarting = startingConversationId === candidate.id;
+                          const candidateProfilePath = getUserProfilePath(candidate);
                           return (
-                            <button
+                            <div
                               key={`search-result-${candidate.id}`}
-                              type="button"
-                              onClick={() => handleStartConversation(candidate)}
-                              disabled={isStarting}
-                              className="w-full rounded-[12px] border border-border bg-surface px-3 py-2.5 flex items-center gap-3 text-left hover:bg-ink/5 transition-colors disabled:opacity-60"
+                              className="w-full rounded-[12px] border border-border bg-surface px-3 py-2.5 flex items-center gap-3 text-left hover:bg-ink/5 transition-colors"
                             >
-                              {renderAvatar(candidate, 'w-10 h-10 rounded-[10px] shrink-0', 'bg-accent-orange/15 text-accent-orange flex items-center justify-center font-black')}
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm font-bold truncate">{toDisplayName(candidate)}</p>
-                                <p className="text-[10px] text-muted uppercase tracking-widest truncate">{candidate.username ? `@${candidate.username}` : formatAddress(candidate.stxAddress)}</p>
-                              </div>
-                              {isStarting ? <Loader2 size={14} className="animate-spin text-muted shrink-0" /> : null}
-                            </button>
+                              <Link to={candidateProfilePath} className="flex min-w-0 flex-1 items-center gap-3">
+                                {renderAvatar(candidate, 'w-10 h-10 rounded-[10px] shrink-0', 'bg-accent-orange/15 text-accent-orange flex items-center justify-center font-black')}
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-bold truncate hover:text-accent-orange transition-colors">{toDisplayName(candidate)}</p>
+                                  <p className="text-[10px] text-muted uppercase tracking-widest truncate hover:text-accent-orange transition-colors">{candidate.username ? `@${candidate.username}` : formatAddress(candidate.stxAddress)}</p>
+                                </div>
+                              </Link>
+                              <button
+                                type="button"
+                                onClick={() => handleStartConversation(candidate)}
+                                disabled={isStarting}
+                                className="rounded-[10px] border border-border px-3 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-ink hover:text-bg transition-colors disabled:opacity-60 shrink-0"
+                              >
+                                {isStarting ? <Loader2 size={14} className="animate-spin text-muted shrink-0" /> : 'Chat'}
+                              </button>
+                            </div>
                           );
                         })}
                       </div>
@@ -631,6 +759,7 @@ export const MessagesPage = () => {
               ) : (
                 visibleConversations.map((chat) => {
                   const displayName = toDisplayName(chat.participant || null);
+                  const participantProfilePath = getUserProfilePath(chat.participant || null);
                   return (
                     <div
                       key={chat.id}
@@ -643,7 +772,13 @@ export const MessagesPage = () => {
                       </div>
                       <div className="flex-1 overflow-hidden min-w-0">
                         <div className="flex justify-between items-center gap-3 mb-1">
-                          <h4 className={`text-sm truncate ${chat.unreadCount > 0 ? 'font-black' : 'font-bold'}`}>{displayName}</h4>
+                          <Link
+                            to={participantProfilePath}
+                            onClick={(event) => event.stopPropagation()}
+                            className={`text-sm truncate ${chat.unreadCount > 0 ? 'font-black' : 'font-bold'} hover:text-accent-orange transition-colors`}
+                          >
+                            {displayName}
+                          </Link>
                           <span className="text-[10px] text-muted whitespace-nowrap">{formatRelativeTime(chat.lastMessageAt)}</span>
                         </div>
                         <p className="text-[10px] text-muted font-bold uppercase tracking-widest mb-1 truncate">{chat.participant?.role || 'User'}</p>
@@ -671,40 +806,130 @@ export const MessagesPage = () => {
                       <ChevronLeft size={24} />
                     </button>
                     {renderAvatar(currentChat.participant || null, 'w-11 h-11 rounded-[12px] shrink-0', 'bg-accent-orange/15 text-accent-orange flex items-center justify-center font-black')}
-                    <div className="min-w-0">
+                    <Link to={getUserProfilePath(currentChat.participant || null)} className="min-w-0 hover:text-accent-orange transition-colors">
                       <h3 className="font-bold text-base md:text-lg truncate">{toDisplayName(currentChat.participant || null)}</h3>
                       <p className="text-[10px] text-muted font-bold uppercase tracking-widest truncate">{currentChat.participant?.username ? `@${currentChat.participant.username}` : currentChat.participant?.role || 'User'}</p>
-                    </div>
+                    </Link>
                   </div>
                   <button className="text-muted hover:text-ink"><MoreHorizontal size={20} /></button>
                 </div>
-
-                <div className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto no-scrollbar space-y-6 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.05),transparent_45%)]">
+                <div className="h-[60vh] min-h-[320px] max-h-[680px] p-4 md:p-6 lg:p-8 overflow-y-auto no-scrollbar space-y-6 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.05),transparent_45%)]">
                   <div className="text-center text-[10px] text-muted font-bold uppercase tracking-widest my-4">Today</div>
+                  {messageActionError ? <p className="text-xs font-bold text-accent-orange text-center">{messageActionError}</p> : null}
                   {messages.map((entry) => {
                     const isMine = entry.senderId === currentUserId;
+                    const isEditing = editingMessageId === entry.id;
+                    const isActing = messageActionId === entry.id;
                     const attachmentUrl = toApiAssetUrl(entry.attachmentUrl);
                     const isImageAttachment = Boolean(attachmentUrl && entry.attachmentMimeType?.startsWith('image/'));
                     return (
                       <div key={entry.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[88%] lg:max-w-[72%] p-4 rounded-[16px] text-sm ${isMine ? 'bg-ink text-bg rounded-tr-none' : 'bg-ink/5 text-ink rounded-tl-none border border-border'}`}>
-                          {attachmentUrl ? (
-                            isImageAttachment ? (
-                              <a href={attachmentUrl} target="_blank" rel="noreferrer" className="block mb-3">
-                                <img src={attachmentUrl} alt={entry.attachmentName || 'Uploaded image'} className="max-h-72 w-auto rounded-[12px] object-cover" referrerPolicy="no-referrer" />
-                              </a>
-                            ) : (
-                              <a href={attachmentUrl} target="_blank" rel="noreferrer" className={`mb-3 flex items-center justify-between gap-3 rounded-[12px] border px-3 py-2 ${isMine ? 'border-bg/15 bg-bg/10 text-bg' : 'border-border bg-surface text-ink'}`}>
-                                <div className="min-w-0">
-                                  <p className="text-xs font-bold truncate">{entry.attachmentName || 'Attachment'}</p>
-                                  <p className={`text-[10px] truncate ${isMine ? 'text-bg/70' : 'text-muted'}`}>{entry.attachmentMimeType || 'File'}</p>
+                        <div className="max-w-[88%] lg:max-w-[72%]">
+                          <div className={`p-4 rounded-[16px] text-sm relative ${isMine ? 'bg-ink text-bg rounded-tr-none' : 'bg-ink/5 text-ink rounded-tl-none border border-border'}`}>
+                            <div className="flex items-start justify-between gap-3 mb-2">
+                              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                {entry.isPinned ? (
+                                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-widest ${isMine ? 'bg-bg/10 text-bg' : 'bg-accent-orange/10 text-accent-orange'}`}>
+                                    <Pin size={10} /> Pinned
+                                  </span>
+                                ) : null}
+                                {entry.isDeleted ? (
+                                  <span className={`text-[9px] font-black uppercase tracking-widest ${isMine ? 'text-bg/70' : 'text-muted'}`}>Deleted</span>
+                                ) : null}
+                              </div>
+                              <div className="relative shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenMessageMenuId((current) => (current === entry.id ? null : entry.id))}
+                                  className={`transition-colors ${isMine ? 'text-bg/70 hover:text-bg' : 'text-muted hover:text-ink'}`}
+                                >
+                                  <MoreHorizontal size={16} />
+                                </button>
+                                {openMessageMenuId === entry.id ? (
+                                  <div className={`absolute right-0 top-full z-20 mt-2 w-36 overflow-hidden rounded-[15px] border shadow-xl ${isMine ? 'border-bg/10 bg-ink text-bg' : 'border-border bg-surface text-ink'}`}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTogglePinnedMessage(entry)}
+                                      disabled={isActing || entry.isDeleted}
+                                      className="flex w-full items-center gap-2 px-4 py-3 text-left text-xs font-bold transition-colors hover:bg-ink/5 disabled:opacity-50"
+                                    >
+                                      <Pin size={14} />
+                                      {entry.isPinned ? 'Unpin' : 'Pin'}
+                                    </button>
+                                    {isMine ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleStartEditMessage(entry)}
+                                          disabled={isActing || entry.isDeleted}
+                                          className="flex w-full items-center gap-2 px-4 py-3 text-left text-xs font-bold transition-colors hover:bg-ink/5 disabled:opacity-50"
+                                        >
+                                          <Pencil size={14} />
+                                          Edit
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteMessage(entry)}
+                                          disabled={isActing || entry.isDeleted}
+                                          className="flex w-full items-center gap-2 px-4 py-3 text-left text-xs font-bold transition-colors hover:bg-ink/5 disabled:opacity-50"
+                                        >
+                                          <Trash2 size={14} />
+                                          Delete
+                                        </button>
+                                      </>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </div>
+                            {attachmentUrl && !entry.isDeleted ? (
+                              isImageAttachment ? (
+                                <a href={attachmentUrl} target="_blank" rel="noreferrer" className="block mb-3">
+                                  <img src={attachmentUrl} alt={entry.attachmentName || 'Uploaded image'} className="max-h-72 w-auto rounded-[12px] object-cover" referrerPolicy="no-referrer" />
+                                </a>
+                              ) : (
+                                <a href={attachmentUrl} target="_blank" rel="noreferrer" className={`mb-3 flex items-center justify-between gap-3 rounded-[12px] border px-3 py-2 ${isMine ? 'border-bg/15 bg-bg/10 text-bg' : 'border-border bg-surface text-ink'}`}>
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-bold truncate">{entry.attachmentName || 'Attachment'}</p>
+                                    <p className={`text-[10px] truncate ${isMine ? 'text-bg/70' : 'text-muted'}`}>{entry.attachmentMimeType || 'File'}</p>
+                                  </div>
+                                  <span className="text-[10px] font-bold uppercase tracking-widest shrink-0">Open</span>
+                                </a>
+                              )
+                            ) : null}
+                            {isEditing ? (
+                              <div className="space-y-2">
+                                <textarea
+                                  value={editingMessageBody}
+                                  onChange={(event) => setEditingMessageBody(event.target.value)}
+                                  className={`w-full rounded-[12px] border px-3 py-2 text-sm outline-none resize-none ${isMine ? 'border-bg/15 bg-bg/10 text-bg placeholder:text-bg/50' : 'border-border bg-surface text-ink'}`}
+                                  rows={3}
+                                  placeholder="Edit your message"
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button type="button" onClick={handleCancelEditMessage} className={`px-3 py-2 text-[10px] font-black uppercase tracking-widest ${isMine ? 'text-bg/70 hover:text-bg' : 'text-muted hover:text-ink'}`}>
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveEditedMessage(entry)}
+                                    disabled={isActing}
+                                    className={`inline-flex items-center gap-1 rounded-[10px] px-3 py-2 text-[10px] font-black uppercase tracking-widest ${isMine ? 'bg-bg text-ink' : 'bg-ink text-bg'} disabled:opacity-50`}
+                                  >
+                                    <Check size={12} /> Save
+                                  </button>
                                 </div>
-                                <span className="text-[10px] font-bold uppercase tracking-widest shrink-0">Open</span>
-                              </a>
-                            )
-                          ) : null}
-                          {entry.body ? <p className="whitespace-pre-wrap break-words">{entry.body}</p> : null}
-                          <p className={`text-[10px] mt-2 ${isMine ? 'text-bg/70' : 'text-muted'}`}>{formatRelativeTime(entry.createdAt)}</p>
+                              </div>
+                            ) : entry.isDeleted ? (
+                              <p className={`italic ${isMine ? 'text-bg/70' : 'text-muted'}`}>Message deleted</p>
+                            ) : entry.body ? (
+                              <p className="whitespace-pre-wrap break-words">{entry.body}</p>
+                            ) : null}
+                            <div className={`text-[10px] mt-2 flex items-center gap-2 ${isMine ? 'text-bg/70' : 'text-muted'}`}>
+                              <span>{formatRelativeTime(entry.createdAt)}</span>
+                              {entry.isEdited && !entry.isDeleted ? <span>Edited</span> : null}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     );

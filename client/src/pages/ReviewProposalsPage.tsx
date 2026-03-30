@@ -11,6 +11,7 @@ import {
   getMyPostedProjects,
   getProject,
   getProjectProposals,
+  getUserProfilePath,
   preflightAcceptProposalPayment,
   recordProposalCompensationPayment,
   getUserProfile,
@@ -396,6 +397,7 @@ export const ReviewProposalsPage = () => {
                 ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1)
                 : '0.0';
               const displayName = profile ? toDisplayName(profile) : toDisplayName({ name: proposal.freelancerName, username: proposal.freelancerUsername, stxAddress: address || `freelancer-${proposal.freelancerId}` });
+              const freelancerProfilePath = getUserProfilePath(profile || { username: proposal.freelancerUsername, stxAddress: address || undefined });
               const canAcceptProposal = proposal.status === 'pending';
               const hasCompletedBothPayments = Boolean(acceptanceProgress?.canFinalize);
               const isProcessingThisProposal = processingProposalId === proposal.id;
@@ -414,7 +416,7 @@ export const ReviewProposalsPage = () => {
                         {displayName.slice(0, 1).toUpperCase()}
                       </div>
                       <div>
-                        <h3 className="font-bold text-lg">{displayName}</h3>
+                        <Link to={freelancerProfilePath} className="font-bold text-lg hover:text-accent-orange transition-colors">{displayName}</Link>
                         <p className="text-xs text-muted">
                           {address ? formatAddress(address) : `Freelancer #${proposal.freelancerId}`} • <Star size={12} className="inline text-accent-orange fill-accent-orange mb-0.5" /> {rating}
                         </p>

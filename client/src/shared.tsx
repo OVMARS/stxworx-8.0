@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import type { UserSession } from '@stacks/connect';
-import { createProject, createProposal, getCategories, submitMilestone, startConversation, getConversationMessages, sendConversationMessage, getUserProfile, getCurrentUser, toApiAssetUrl, toDisplayName, formatRelativeTime, type ApiConversationMessage } from './lib/api';
+import { createProject, createProposal, getCategories, submitMilestone, startConversation, getConversationMessages, sendConversationMessage, getUserProfile, getCurrentUser, getUserProfilePath, toApiAssetUrl, toDisplayName, formatRelativeTime, type ApiConversationMessage } from './lib/api';
 import { convertAmount, getUSDValue } from './lib/currency';
 import { completeEscrowMilestone } from './lib/escrow';
 import type { ApiCategory } from './types/job';
@@ -462,7 +462,9 @@ export const MessageModal = ({ isOpen, onClose, recipientAddress }: { isOpen: bo
                       {toDisplayName(recipientProfile).charAt(0) || recipientAddress.charAt(0) || 'U'}
                     </div>
                     <div>
-                      <h3 className="font-bold text-sm">{toDisplayName(recipientProfile) || 'User'}</h3>
+                      <Link to={getUserProfilePath(recipientProfile)} className="font-bold text-sm hover:text-accent-orange transition-colors">
+                        {toDisplayName(recipientProfile) || 'User'}
+                      </Link>
                       <p className="text-[10px] text-muted">{recipientProfile?.role || 'User'}</p>
                     </div>
                   </div>

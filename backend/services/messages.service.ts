@@ -17,6 +17,7 @@ async function getUnreadMessagesForParticipant(conversationId: number, userId: n
         .where(
           and(
             eq(messages.conversationId, conversationId),
+            eq(messages.isDeleted, false),
             ne(messages.senderId, userId),
             gt(messages.createdAt, lastReadAt),
           ),
@@ -24,7 +25,7 @@ async function getUnreadMessagesForParticipant(conversationId: number, userId: n
     : await db
         .select({ id: messages.id })
         .from(messages)
-        .where(and(eq(messages.conversationId, conversationId), ne(messages.senderId, userId)));
+        .where(and(eq(messages.conversationId, conversationId), eq(messages.isDeleted, false), ne(messages.senderId, userId)));
 
   return unreadMessages.length;
 }
@@ -34,11 +35,37 @@ type SendMessageInput = {
   attachment?: ChatAttachmentUpload;
 };
 
+const messageSelectFields = {
+  id: messages.id,
+  conversationId: messages.conversationId,
+  senderId: messages.senderId,
+  body: messages.body,
+  attachmentUrl: messages.attachmentUrl,
+  attachmentName: messages.attachmentName,
+  attachmentMimeType: messages.attachmentMimeType,
+  attachmentSize: messages.attachmentSize,
+  isPinned: messages.isPinned,
+  isEdited: messages.isEdited,
+  isDeleted: messages.isDeleted,
+  updatedAt: messages.updatedAt,
+  deletedAt: messages.deletedAt,
+  createdAt: messages.createdAt,
+  senderAddress: users.stxAddress,
+  senderName: users.name,
+  senderUsername: users.username,
+  senderRole: users.role,
+};
+
 function toMessagePreview(message?: {
   body?: string | null;
   attachmentName?: string | null;
   attachmentMimeType?: string | null;
+  isDeleted?: boolean | null;
 }) {
+  if (message?.isDeleted) {
+    return "Message deleted";
+  }
+
   const body = message?.body?.trim();
   if (body) {
     return body;
@@ -54,6 +81,16 @@ function toMessagePreview(message?: {
     : `Attachment: ${attachmentName}`;
 }
 
+async function fetchMessageById(messageId: number) {
+  const [message] = await db
+    .select(messageSelectFields)
+    .from(messages)
+    .leftJoin(users, eq(messages.senderId, users.id))
+    .where(eq(messages.id, messageId));
+
+  return message || null;
+}
+
 export const messagesService = {
   async assertConversationAccess(conversationId: number, userId: number) {
     const [participant] = await db
@@ -66,6 +103,35 @@ export const messagesService = {
     }
 
     return participant;
+  },
+
+  async getMessageForConversation(conversationId: number, messageId: number, userId: number) {
+    await this.assertConversationAccess(conversationId, userId);
+
+    const [message] = await db
+      .select({
+        id: messages.id,
+        conversationId: messages.conversationId,
+        senderId: messages.senderId,
+        body: messages.body,
+        attachmentUrl: messages.attachmentUrl,
+        isDeleted: messages.isDeleted,
+      })
+      .from(messages)
+      .where(and(eq(messages.id, messageId), eq(messages.conversationId, conversationId)));
+
+    if (!message) {
+      throw new Error("Message not found");
+    }
+
+    return message;
+  },
+
+  async touchConversation(conversationId: number) {
+    await db
+      .update(conversations)
+      .set({ updatedAt: new Date() })
+      .where(eq(conversations.id, conversationId));
   },
 
   async assertCanMessage(senderId: number, recipientId: number) {
@@ -188,6 +254,7 @@ export const messagesService = {
             body: messages.body,
             attachmentName: messages.attachmentName,
             attachmentMimeType: messages.attachmentMimeType,
+            isDeleted: messages.isDeleted,
             createdAt: messages.createdAt,
           })
           .from(messages)
@@ -219,21 +286,7 @@ export const messagesService = {
     await this.assertConversationAccess(conversationId, userId);
 
     const rows = await db
-      .select({
-        id: messages.id,
-        conversationId: messages.conversationId,
-        senderId: messages.senderId,
-        body: messages.body,
-        attachmentUrl: messages.attachmentUrl,
-        attachmentName: messages.attachmentName,
-        attachmentMimeType: messages.attachmentMimeType,
-        attachmentSize: messages.attachmentSize,
-        createdAt: messages.createdAt,
-        senderAddress: users.stxAddress,
-        senderName: users.name,
-        senderUsername: users.username,
-        senderRole: users.role,
-      })
+      .select(messageSelectFields)
       .from(messages)
       .leftJoin(users, eq(messages.senderId, users.id))
       .where(eq(messages.conversationId, conversationId))
@@ -272,38 +325,97 @@ export const messagesService = {
       attachmentName: savedAttachment?.fileName,
       attachmentMimeType: savedAttachment?.mimeType,
       attachmentSize: savedAttachment?.size,
+      updatedAt: new Date(),
     });
 
-    await db
-      .update(conversations)
-      .set({ updatedAt: new Date() })
-      .where(eq(conversations.id, conversationId));
+    await this.touchConversation(conversationId);
 
     await db
       .update(conversationParticipants)
       .set({ lastReadAt: new Date() })
       .where(and(eq(conversationParticipants.conversationId, conversationId), eq(conversationParticipants.userId, userId)));
 
-    const [created] = await db
-      .select({
-        id: messages.id,
-        conversationId: messages.conversationId,
-        senderId: messages.senderId,
-        body: messages.body,
-        attachmentUrl: messages.attachmentUrl,
-        attachmentName: messages.attachmentName,
-        attachmentMimeType: messages.attachmentMimeType,
-        attachmentSize: messages.attachmentSize,
-        createdAt: messages.createdAt,
-        senderAddress: users.stxAddress,
-        senderName: users.name,
-        senderUsername: users.username,
-        senderRole: users.role,
-      })
-      .from(messages)
-      .leftJoin(users, eq(messages.senderId, users.id))
-      .where(eq(messages.id, result.insertId));
+    return fetchMessageById(result.insertId);
+  },
 
-    return created || null;
+  async updateMessage(conversationId: number, messageId: number, userId: number, body: string) {
+    const existing = await this.getMessageForConversation(conversationId, messageId, userId);
+
+    if (existing.senderId !== userId) {
+      throw new Error("You can only edit your own messages");
+    }
+
+    if (existing.isDeleted) {
+      throw new Error("Deleted messages cannot be edited");
+    }
+
+    const nextBody = body.trim();
+    if (!nextBody && !existing.attachmentUrl) {
+      throw new Error("Message body is required");
+    }
+
+    await db
+      .update(messages)
+      .set({
+        body: nextBody,
+        isEdited: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(messages.id, messageId));
+
+    await this.touchConversation(conversationId);
+
+    return fetchMessageById(messageId);
+  },
+
+  async deleteMessage(conversationId: number, messageId: number, userId: number) {
+    const existing = await this.getMessageForConversation(conversationId, messageId, userId);
+
+    if (existing.senderId !== userId) {
+      throw new Error("You can only delete your own messages");
+    }
+
+    if (existing.isDeleted) {
+      return fetchMessageById(messageId);
+    }
+
+    await db
+      .update(messages)
+      .set({
+        body: "",
+        attachmentUrl: null,
+        attachmentName: null,
+        attachmentMimeType: null,
+        attachmentSize: null,
+        isPinned: false,
+        isDeleted: true,
+        updatedAt: new Date(),
+        deletedAt: new Date(),
+      })
+      .where(eq(messages.id, messageId));
+
+    await this.touchConversation(conversationId);
+
+    return fetchMessageById(messageId);
+  },
+
+  async setPinned(conversationId: number, messageId: number, userId: number, isPinned: boolean) {
+    const existing = await this.getMessageForConversation(conversationId, messageId, userId);
+
+    if (existing.isDeleted) {
+      throw new Error("Deleted messages cannot be pinned");
+    }
+
+    await db
+      .update(messages)
+      .set({
+        isPinned,
+        updatedAt: new Date(),
+      })
+      .where(eq(messages.id, messageId));
+
+    await this.touchConversation(conversationId);
+
+    return fetchMessageById(messageId);
   },
 };

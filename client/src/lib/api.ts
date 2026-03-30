@@ -289,6 +289,11 @@ export interface ApiConversationMessage {
   attachmentName?: string | null;
   attachmentMimeType?: string | null;
   attachmentSize?: number | null;
+  isPinned?: boolean;
+  isEdited?: boolean;
+  isDeleted?: boolean;
+  updatedAt?: string;
+  deletedAt?: string | null;
   createdAt?: string;
   senderAddress?: string;
   senderName?: string | null;
@@ -958,6 +963,26 @@ export async function sendConversationMessage(conversationId: number, body?: str
       body: normalizedBody || (attachment ? ' ' : body),
       attachment,
     }),
+  });
+}
+
+export async function updateConversationMessage(conversationId: number, messageId: number, body: string) {
+  return apiRequest<ApiConversationMessage>(`/messages/conversations/${conversationId}/messages/${messageId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ body }),
+  });
+}
+
+export async function deleteConversationMessage(conversationId: number, messageId: number) {
+  return apiRequest<ApiConversationMessage>(`/messages/conversations/${conversationId}/messages/${messageId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function pinConversationMessage(conversationId: number, messageId: number, isPinned: boolean) {
+  return apiRequest<ApiConversationMessage>(`/messages/conversations/${conversationId}/messages/${messageId}/pin`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isPinned }),
   });
 }
 

@@ -1747,110 +1747,84 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
             {activeTab === 'Friends' && (
               <div className="space-y-6">
                 {isOwnProfile ? <>
-                <div className="card p-6">
-                  <h3 className="font-bold text-lg mb-4">Connections</h3>
-                  <div className="space-y-4">
-                    {acceptedConnections.map((connection) => {
-                      const otherUserProfilePath = getUserProfilePath(connection.otherUser);
-                      const conversationPath = getConversationPath(connection.otherUser);
+                  <div className="card p-6">
+                    <h3 className="font-bold text-lg mb-4">Connections</h3>
+                    <div className="space-y-4">
+                      {acceptedConnections.map((connection) => {
+                        const otherUserProfilePath = getUserProfilePath(connection.otherUser);
+                        const conversationPath = getConversationPath(connection.otherUser);
 
-                      return (
-                      <div key={connection.id} className="border border-border rounded-[15px] p-4 flex items-center justify-between gap-4">
-                        <div>
-                          <Link to={otherUserProfilePath} className="font-bold text-sm hover:text-accent-orange transition-colors">{toDisplayName(connection.otherUser) || 'Connection'}</Link>
-                          <p className="text-[10px] text-muted uppercase tracking-widest">{connection.otherUser?.role || 'User'}</p>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0">
-                          <Link to={conversationPath} className="btn-outline py-2 px-4 text-xs">Chat</Link>
-                          <span className="text-xs font-bold text-accent-cyan">Connected</span>
-                        </div>
+                        return (
+                          <div key={connection.id} className="border border-border rounded-[15px] p-4 flex items-center justify-between gap-4">
+                            <div>
+                              <Link to={otherUserProfilePath} className="font-bold text-sm hover:text-accent-orange transition-colors">{toDisplayName(connection.otherUser) || 'Connection'}</Link>
+                              <p className="text-[10px] text-muted uppercase tracking-widest">{connection.otherUser?.role || 'User'}</p>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <Link to={conversationPath} className="btn-outline py-2 px-4 text-xs">Chat</Link>
+                              <span className="text-xs font-bold text-accent-cyan">Connected</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {acceptedConnections.length === 0 && <p className="text-sm text-muted">No accepted connections yet.</p>}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="card p-6">
+                      <h3 className="font-bold text-lg mb-4">Incoming Requests</h3>
+                      <div className="space-y-4">
+                        {incomingConnectionRequests.map((connection) => (
+                          <div key={connection.id} className="border border-border rounded-[15px] p-4">
+                            <Link to={getUserProfilePath(connection.otherUser)} className="font-bold text-sm mb-1 inline-block hover:text-accent-orange transition-colors">{toDisplayName(connection.otherUser) || 'User'}</Link>
+                            <div className="flex gap-2 mt-3">
+                              <button onClick={() => handleRespondToConnection(connection.id, 'accept')} className="btn-primary py-2 px-4 text-xs">Accept</button>
+                              <button onClick={() => handleRespondToConnection(connection.id, 'decline')} className="btn-outline py-2 px-4 text-xs">Decline</button>
+                            </div>
+                          </div>
+                        ))}
+                        {incomingConnectionRequests.length === 0 && <p className="text-sm text-muted">No incoming requests.</p>}
                       </div>
-                    )})}
-                    {acceptedConnections.length === 0 && <p className="text-sm text-muted">No accepted connections yet.</p>}
-                  </div>
-                </div>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="card p-6">
-                    <h3 className="font-bold text-lg mb-4">Incoming Requests</h3>
-                    <div className="space-y-4">
-                      {incomingConnectionRequests.map((connection) => (
-                        <div key={connection.id} className="border border-border rounded-[15px] p-4">
-                          <p className="font-bold text-sm mb-1">{toDisplayName(connection.otherUser) || 'User'}</p>
-                          <div className="flex gap-2 mt-3">
-                            <button onClick={() => handleRespondToConnection(connection.id, 'accept')} className="btn-primary py-2 px-4 text-xs">Accept</button>
-                            <button onClick={() => handleRespondToConnection(connection.id, 'decline')} className="btn-outline py-2 px-4 text-xs">Decline</button>
+                    <div className="card p-6">
+                      <h3 className="font-bold text-lg mb-4">Suggested Connections</h3>
+                      <div className="space-y-4">
+                        {connectionSuggestions.map((suggestion) => (
+                          <div key={suggestion.id} className="border border-border rounded-[15px] p-4 flex items-center justify-between gap-4">
+                            <div>
+                              <Link to={getUserProfilePath(suggestion)} className="font-bold text-sm hover:text-accent-orange transition-colors">{toDisplayName(suggestion)}</Link>
+                              <p className="text-[10px] text-muted uppercase tracking-widest">{suggestion.specialty || suggestion.role}</p>
+                            </div>
+                            <button onClick={() => handleRequestConnection(suggestion.id)} className="btn-outline py-2 px-4 text-xs">Connect</button>
                           </div>
-                        </div>
-                      ))}
-                      {incomingConnectionRequests.length === 0 && <p className="text-sm text-muted">No incoming requests.</p>}
+                        ))}
+                        {connectionSuggestions.length === 0 && <p className="text-sm text-muted">No suggestions right now.</p>}
+                      </div>
                     </div>
                   </div>
-                  <div className="card p-6">
-                    <h3 className="font-bold text-lg mb-4">Suggested Connections</h3>
-                    <div className="space-y-4">
-                      {connectionSuggestions.map((suggestion) => (
-                        <div key={suggestion.id} className="border border-border rounded-[15px] p-4 flex items-center justify-between gap-4">
-                          <div>
-                            <p className="font-bold text-sm">{toDisplayName(suggestion)}</p>
-                            <p className="text-[10px] text-muted uppercase tracking-widest">{suggestion.specialty || suggestion.role}</p>
-                          </div>
-                          <button onClick={() => handleRequestConnection(suggestion.id)} className="btn-outline py-2 px-4 text-xs">Connect</button>
-                        </div>
-                      ))}
-                      {connectionSuggestions.length === 0 && <p className="text-sm text-muted">No suggestions right now.</p>}
-                    </div>
-                  </div>
-                </div>
 
-                {outgoingConnectionRequests.length > 0 && (
-                  <div className="card p-6">
-                    <h3 className="font-bold text-lg mb-4">Pending Requests</h3>
-                    <div className="space-y-4">
-                      {outgoingConnectionRequests.map((connection) => (
-                        <div key={connection.id} className="border border-border rounded-[15px] p-4 flex items-center justify-between gap-4">
-                          <div>
-                            <p className="font-bold text-sm">{toDisplayName(connection.otherUser) || 'User'}</p>
-                            <p className="text-[10px] text-muted uppercase tracking-widest">{connection.otherUser?.role || 'User'}</p>
+                  {outgoingConnectionRequests.length > 0 && (
+                    <div className="card p-6">
+                      <h3 className="font-bold text-lg mb-4">Pending Requests</h3>
+                      <div className="space-y-4">
+                        {outgoingConnectionRequests.map((connection) => (
+                          <div key={connection.id} className="border border-border rounded-[15px] p-4 flex items-center justify-between gap-4">
+                            <div>
+                              <Link to={getUserProfilePath(connection.otherUser)} className="font-bold text-sm hover:text-accent-orange transition-colors">{toDisplayName(connection.otherUser) || 'User'}</Link>
+                              <p className="text-[10px] text-muted uppercase tracking-widest">{connection.otherUser?.role || 'User'}</p>
+                            </div>
+                            <span className="text-xs font-bold text-muted">Pending</span>
                           </div>
-                          <span className="text-xs font-bold text-muted">Pending</span>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </> : <div className="card p-6 text-sm text-muted">Connection management is only available on your own profile.</div>}
+                  )}
+                </> : <div className="card p-6 text-sm text-muted">Connections are only visible on your own profile.</div>}
               </div>
+
             )}
-          </div>
-
-          {/* Sidebar Info */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className={`card ${isClient ? 'bg-accent-blue' : 'bg-accent-orange'} text-bg`}>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-6">
-                <p className="text-2xl font-black break-words">{isClient ? `${formatTokenAmount(totalBudget)}` : profile?.hourlyRate ? `${profile.hourlyRate}` : `${formatTokenAmount(profile?.totalEarned)}`}</p>
-                <p className="text-xs font-bold opacity-60">{isClient ? 'Total Spend' : profile?.hourlyRate ? 'per hour' : 'Total Earned'}</p>
-              </div>
-              <div className="space-y-4 mb-8">
-                <div className="flex items-start justify-between gap-3 text-xs font-bold border-b border-bg/10 pb-2">
-                  <span className="opacity-60">Location</span>
-                  <span className="text-right">{locationDisplay || 'Not added'}</span>
-                </div>
-                <div className="flex items-start justify-between gap-3 text-xs font-bold border-b border-bg/10 pb-2">
-                  <span className="opacity-60">{isClient ? 'Jobs Posted' : 'Projects'}</span>
-                  <span>{projects.length}</span>
-                </div>
-                <div className="flex items-start justify-between gap-3 text-xs font-bold border-b border-bg/10 pb-2">
-                  <span className="opacity-60">{isClient ? 'Member Since' : 'Rating'}</span>
-                  <span>{isClient ? joinedDate : averageRating}</span>
-                </div>
-              </div>
-              {!isEditing && isOwnProfile ? (
-                <button onClick={handleEditToggle} className="w-full bg-bg text-white py-4 rounded-[15px] font-bold hover:bg-white hover:text-ink transition-all">
-                  Edit Profile
-                </button>
-              ) : null}
-            </div>
 
             <div className="card">
               <h3 className="font-bold text-sm mb-6 flex items-center justify-between">

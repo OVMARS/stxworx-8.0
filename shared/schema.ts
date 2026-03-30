@@ -340,6 +340,11 @@ export const messages = mysqlTable("messages", {
   attachmentName: varchar("attachment_name", { length: 255 }),
   attachmentMimeType: varchar("attachment_mime_type", { length: 255 }),
   attachmentSize: int("attachment_size", { unsigned: true }),
+  isPinned: boolean("is_pinned").default(false).notNull(),
+  isEdited: boolean("is_edited").default(false).notNull(),
+  isDeleted: boolean("is_deleted").default(false).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
