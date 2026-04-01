@@ -8,10 +8,10 @@ plan:
   - id: 0
     transactions:
     - transaction-type: contract-publish
-      contract-name: escrow-multi-token-v10
+      contract-name: escrow-multi-token-v11
       expected-sender: ST4RX4SP7XYEC9BSA6XJFA74Y45M3TQFH13NT2M9
       cost: 93820
-      path: contracts/escrow-multi-token-v10.clar
+      path: contracts/escrow-multi-token-v11.clar
       anchor-block-only: true
       clarity-version: 4
     - transaction-type: contract-publish

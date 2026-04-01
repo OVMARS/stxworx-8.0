@@ -126,10 +126,10 @@ export const AdminDashboard = () => {
     setResolutionDrafts((current) => ({
       ...current,
       [disputeId]: {
-        favorFreelancer: true,
-        resolution: '',
-        resolutionTxId: '',
         ...current[disputeId],
+        favorFreelancer: current[disputeId]?.favorFreelancer ?? true,
+        resolution: current[disputeId]?.resolution ?? '',
+        resolutionTxId: current[disputeId]?.resolutionTxId ?? '',
         ...patch,
       },
     }));

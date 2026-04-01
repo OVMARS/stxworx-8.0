@@ -2,7 +2,6 @@ import type { ApiLeaderboardEntry } from '../types/leaderboard';
 import type { ApiCategory, ApiProject, AppJob, AppJobMilestone } from '../types/job';
 import type { AuthenticatedUserResponse, ApiUserProfile, ApiUserReview, ApiUsernameAvailability, UserRole } from '../types/user';
 import { decodeSocialPostId, encodeSocialPostId } from '@shared/social-post-permalink';
-import { retryResponseWithX402Payment } from './x402';
 
 // Re-export types for convenience
 export type { ApiProject, ApiCategory, AppJob, AppJobMilestone };
@@ -37,49 +36,6 @@ export interface ApiProposal {
   freelancerAddress?: string;
   freelancerUsername?: string | null;
   freelancerName?: string | null;
-}
-
-export interface ApiProposalAcceptanceProgress {
-  proposalId: number;
-  projectId: number;
-  clientId: number;
-  compensationAmount: string;
-  platformFeeAmount: string;
-  compensation: {
-    status: 'not_started' | 'pending' | 'confirmed' | 'failed';
-    txId?: string | null;
-    onChainId?: number | null;
-    verifiedAt?: string | null;
-    lastCheckedAt?: string | null;
-    error?: string | null;
-  };
-  platformFee: {
-    status: 'not_started' | 'pending' | 'confirmed' | 'failed';
-    txId?: string | null;
-    payer?: string | null;
-    network?: string | null;
-    verifiedAt?: string | null;
-    expiresAt?: string | null;
-    error?: string | null;
-  };
-  finalizedAt?: string | null;
-  canFinalize: boolean;
-}
-
-export interface AcceptProposalStatusResponse {
-  success: boolean;
-  progress: ApiProposalAcceptanceProgress | null;
-}
-
-export interface AcceptProposalPreflightResponse {
-  success: boolean;
-  payment: {
-    payer: string | null;
-    transaction: string | null;
-    network: string | null;
-    expiresAt: string | null;
-  };
-  progress?: ApiProposalAcceptanceProgress | null;
 }
 
 export interface ApiMilestoneSubmission {
@@ -135,8 +91,6 @@ export interface CreateProjectInput {
   milestone4Description?: string;
   milestone4Amount?: string;
 }
-
-type X402TokenType = CreateProjectInput['tokenType'];
 
 export interface CreateProposalInput {
   projectId: number;
@@ -414,12 +368,6 @@ function buildUrl(path: string, searchParams?: RequestOptions['searchParams']) {
   return `${url.pathname}${url.search}`;
 }
 
-function createX402Headers(tokenType: X402TokenType) {
-  return {
-    'x-pay-token': tokenType,
-  };
-}
-
 async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { searchParams, headers, ...init } = options;
   const requestUrl = buildUrl(path, searchParams);
@@ -433,14 +381,6 @@ async function apiRequest<T>(path: string, options: RequestOptions = {}): Promis
     ...init,
     headers: requestHeaders,
   });
-
-  if (response.status === 402) {
-    response = await retryResponseWithX402Payment(response, requestUrl, {
-      credentials: 'include',
-      ...init,
-      headers: requestHeaders,
-    });
-  }
 
   if (!response.ok) {
     let message = `Request failed with status ${response.status}`;
@@ -735,18 +675,14 @@ export async function getMyCompletedProjects() {
 export async function createProject(input: CreateProjectInput) {
   return apiRequest<ApiProject>('/projects', {
     method: 'POST',
-    headers: createX402Headers(input.tokenType),
     body: JSON.stringify(input),
   });
 }
 
-export async function activateProject(projectId: number, input: { escrowTxId: string; onChainId: number; tokenType: X402TokenType }) {
-  const { tokenType, ...payload } = input;
-
+export async function activateProject(projectId: number, input: { escrowTxId: string; onChainId: number }) {
   return apiRequest<ApiProject>(`/projects/${projectId}/activate`, {
     method: 'PATCH',
-    headers: createX402Headers(tokenType),
-    body: JSON.stringify(payload),
+    body: JSON.stringify(input),
   });
 }
 
@@ -823,31 +759,11 @@ export async function getMyProposals() {
 
 export async function acceptProposal(
   proposalId: number,
+  input: { escrowTxId: string; onChainId: number },
 ) {
   return apiRequest<ApiProposal>(`/proposals/${proposalId}/accept`, {
     method: 'PATCH',
-  });
-}
-
-export async function getProposalAcceptanceStatus(proposalId: number) {
-  return apiRequest<AcceptProposalStatusResponse>(`/proposals/${proposalId}/accept/status`, {
-    method: 'GET',
-  });
-}
-
-export async function recordProposalCompensationPayment(
-  proposalId: number,
-  input: { escrowTxId: string; onChainId: number },
-) {
-  return apiRequest<AcceptProposalStatusResponse>(`/proposals/${proposalId}/accept/compensation`, {
-    method: 'POST',
     body: JSON.stringify(input),
-  });
-}
-
-export async function preflightAcceptProposalPayment(proposalId: number) {
-  return apiRequest<AcceptProposalPreflightResponse>(`/proposals/${proposalId}/accept/preflight`, {
-    method: 'POST',
   });
 }
 

@@ -112,7 +112,7 @@ const announcementSlides = [
       <>
         We're currently in <span className="font-black text-accent-orange">Beta!</span> Official launch planned for{' '}
         <span className="font-black">April 2nd.</span> Currently addressing{' '}
-        <span className="font-black text-accent-orange">X402</span> &{' '}
+        <span className="font-black text-accent-orange">wallet</span> &{' '}
         <span className="font-black text-accent-blue">AI integration</span> QA/QC.
       </>
     ),
@@ -183,7 +183,7 @@ const AnnouncementBar = ({ navigate }: { navigate: (path: string) => void }) => 
             <>
               <span className="sm:hidden">WE'RE CURRENTLY IN BETA! OFFICIAL LAUNCH PLANNED FOR APRIL 2ND</span>
               <span className="hidden sm:inline">WE'RE CURRENTLY IN BETA! OFFICIAL LAUNCH PLANNED FOR APRIL 2ND. STAY TUNED FOR EXCITING UPDATES.
-              CURRENTLY ADDRESSING X402 & AI INTEGRATION QA/QC.</span>
+              CURRENTLY ADDRESSING WALLET & AI INTEGRATION QA/QC.</span>
             </>
           )}
         </motion.p>

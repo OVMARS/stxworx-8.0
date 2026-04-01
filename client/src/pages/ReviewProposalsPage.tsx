@@ -7,48 +7,22 @@ import {
   formatAddress,
   formatRelativeTime,
   formatTokenAmount,
-  getProposalAcceptanceStatus,
   getMyPostedProjects,
   getProject,
   getProjectProposals,
   getUserProfilePath,
-  preflightAcceptProposalPayment,
-  recordProposalCompensationPayment,
   getUserProfile,
   getUserReviews,
   rejectProposal,
   toDisplayName,
-  type ApiProposalAcceptanceProgress,
   type ApiProposal,
 } from '../lib/api';
 import { createEscrowForProject } from '../lib/escrow';
 import type { ApiProject } from '../types/job';
 import type { ApiUserProfile, ApiUserReview } from '../types/user';
-import { calculateProposalAcceptanceAmounts } from '../../../shared/proposal-acceptance';
-
-type AcceptanceStep = 'compensation' | 'platformFee' | 'finalize';
-
-function getProposalPaymentBreakdown(proposal: ApiProposal, progress?: ApiProposalAcceptanceProgress | null) {
-  if (progress) {
-    return {
-      compensationAmount: progress.compensationAmount,
-      platformFeeAmount: progress.platformFeeAmount,
-    };
-  }
-
-  try {
-    return calculateProposalAcceptanceAmounts(proposal.proposedAmount, '10');
-  } catch {
-    return null;
-  }
-}
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
-}
-
-function getAcceptanceError(progress?: ApiProposalAcceptanceProgress | null, fallback?: string | null) {
-  return fallback || progress?.compensation.error || progress?.platformFee.error || null;
 }
 
 export const ReviewProposalsPage = () => {
@@ -62,23 +36,8 @@ export const ReviewProposalsPage = () => {
   const [messageRecipientAddress, setMessageRecipientAddress] = useState('');
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   const [processingProposalId, setProcessingProposalId] = useState<number | null>(null);
-  const [processingStep, setProcessingStep] = useState<{ proposalId: number; step: AcceptanceStep } | null>(null);
-  const [expandedProposalId, setExpandedProposalId] = useState<number | null>(null);
-  const [acceptanceProgressByProposal, setAcceptanceProgressByProposal] = useState<Record<number, ApiProposalAcceptanceProgress>>({});
   const [acceptanceErrorsByProposal, setAcceptanceErrorsByProposal] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
-
-  const setProposalAcceptanceProgress = useCallback((proposalId: number, progress: ApiProposalAcceptanceProgress | null) => {
-    setAcceptanceProgressByProposal((current) => {
-      const next = { ...current };
-      if (progress) {
-        next[proposalId] = progress;
-      } else {
-        delete next[proposalId];
-      }
-      return next;
-    });
-  }, []);
 
   const setProposalAcceptanceError = useCallback((proposalId: number, error: string | null) => {
     setAcceptanceErrorsByProposal((current) => {
@@ -92,13 +51,6 @@ export const ReviewProposalsPage = () => {
     });
   }, []);
 
-  const refreshProposalAcceptanceStatus = useCallback(async (proposalId: number) => {
-    const response = await getProposalAcceptanceStatus(proposalId);
-    setProposalAcceptanceProgress(proposalId, response.progress);
-    setProposalAcceptanceError(proposalId, getAcceptanceError(response.progress, null));
-    return response.progress;
-  }, [setProposalAcceptanceError, setProposalAcceptanceProgress]);
-
   const loadProposals = useCallback(async (projectIdOverride?: number) => {
     setLoading(true);
     try {
@@ -109,9 +61,7 @@ export const ReviewProposalsPage = () => {
       if (!resolvedProjectId) {
         setProject(null);
         setProposals([]);
-        setAcceptanceProgressByProposal({});
         setAcceptanceErrorsByProposal({});
-        setExpandedProposalId(null);
         return;
       }
 
@@ -122,28 +72,6 @@ export const ReviewProposalsPage = () => {
 
       setProject(resolvedProject);
       setProposals(resolvedProposals);
-      setExpandedProposalId(null);
-
-      const progressEntries = await Promise.all(
-        resolvedProposals
-          .filter((proposal) => proposal.status === 'pending')
-          .map(async (proposal) => {
-            try {
-              const response = await getProposalAcceptanceStatus(proposal.id);
-              return [proposal.id, response.progress] as const;
-            } catch {
-              return null;
-            }
-          }),
-      );
-
-      setAcceptanceProgressByProposal(
-        Object.fromEntries(
-          progressEntries.filter(
-            (entry): entry is readonly [number, ApiProposalAcceptanceProgress] => Boolean(entry?.[1]),
-          ),
-        ),
-      );
       setAcceptanceErrorsByProposal({});
 
       const freelancerAddresses = Array.from(
@@ -196,145 +124,26 @@ export const ReviewProposalsPage = () => {
     [proposals],
   );
 
-  const finalizeProposalAcceptance = async (proposal: ApiProposal) => {
-    if (!project) {
-      return false;
-    }
-
-    setProcessingProposalId(proposal.id);
-    setProcessingStep({ proposalId: proposal.id, step: 'finalize' });
-    setProposalAcceptanceError(proposal.id, null);
-
-    try {
-      await acceptProposal(proposal.id);
-      setExpandedProposalId((current) => (current === proposal.id ? null : current));
-      setProposalAcceptanceError(proposal.id, null);
-      await loadProposals(project.id);
-      return true;
-    } catch (error) {
-      console.error('Failed to finalize proposal acceptance:', error);
-      setProposalAcceptanceError(proposal.id, getErrorMessage(error, 'Failed to finalize proposal acceptance'));
-      return false;
-    } finally {
-      setProcessingProposalId(null);
-      setProcessingStep((current) => (
-        current?.proposalId === proposal.id && current.step === 'finalize'
-          ? null
-          : current
-      ));
-    }
-  };
-
   const handleAcceptProposal = async (proposal: ApiProposal) => {
-    const progress = acceptanceProgressByProposal[proposal.id];
-    if (progress?.canFinalize) {
-      await finalizeProposalAcceptance(proposal);
-      return;
-    }
-
-    if (progress?.compensation.status === 'pending') {
-      try {
-        const refreshedProgress = await refreshProposalAcceptanceStatus(proposal.id);
-        if (refreshedProgress?.canFinalize) {
-          await finalizeProposalAcceptance(proposal);
-          return;
-        }
-      } catch (error) {
-        setProposalAcceptanceError(proposal.id, getErrorMessage(error, 'Failed to refresh compensation verification status'));
-      }
-    }
-
-    if (progress?.platformFee.status === 'confirmed' && progress?.compensation.status === 'confirmed') {
-      await finalizeProposalAcceptance(proposal);
-      return;
-    }
-
-    setProposalAcceptanceError(proposal.id, null);
-    setExpandedProposalId((current) => (current === proposal.id ? null : proposal.id));
-  };
-
-  const handlePayClientCompensation = async (proposal: ApiProposal) => {
     if (!project || !proposal.freelancerAddress) {
       return;
     }
 
-    const paymentBreakdown = getProposalPaymentBreakdown(proposal, acceptanceProgressByProposal[proposal.id]);
-    if (!paymentBreakdown) {
-      setProposalAcceptanceError(proposal.id, 'Unable to calculate the client compensation split for this proposal');
-      return;
-    }
-
     setProcessingProposalId(proposal.id);
-    setProcessingStep({ proposalId: proposal.id, step: 'compensation' });
     setProposalAcceptanceError(proposal.id, null);
 
     try {
-      const escrow = await createEscrowForProject(project, proposal.freelancerAddress, paymentBreakdown.compensationAmount);
-      const response = await recordProposalCompensationPayment(proposal.id, {
+      const escrow = await createEscrowForProject(project, proposal.freelancerAddress, proposal.proposedAmount);
+      await acceptProposal(proposal.id, {
         escrowTxId: escrow.txId,
         onChainId: escrow.onChainId,
       });
-
-      if (response.progress) {
-        setProposalAcceptanceProgress(proposal.id, response.progress);
-        setProposalAcceptanceError(proposal.id, getAcceptanceError(response.progress, null));
-      }
-      setExpandedProposalId(proposal.id);
-
-      if (response.progress?.canFinalize) {
-        await finalizeProposalAcceptance(proposal);
-      }
+      await loadProposals(project.id);
     } catch (error) {
-      console.error('Failed to pay client compensation:', error);
-      setProposalAcceptanceError(proposal.id, getErrorMessage(error, 'Failed to pay client compensation'));
+      console.error('Failed to accept proposal:', error);
+      setProposalAcceptanceError(proposal.id, getErrorMessage(error, 'Failed to accept proposal'));
     } finally {
       setProcessingProposalId(null);
-      setProcessingStep((current) => (
-        current?.proposalId === proposal.id && current.step === 'compensation'
-          ? null
-          : current
-      ));
-    }
-  };
-
-  const handlePayPlatformFee = async (proposal: ApiProposal) => {
-    if (!project) {
-      return;
-    }
-
-    const paymentBreakdown = getProposalPaymentBreakdown(proposal, acceptanceProgressByProposal[proposal.id]);
-    if (!paymentBreakdown) {
-      setProposalAcceptanceError(proposal.id, 'Unable to calculate the platform fee split for this proposal');
-      return;
-    }
-
-    setProcessingProposalId(proposal.id);
-    setProcessingStep({ proposalId: proposal.id, step: 'platformFee' });
-    setProposalAcceptanceError(proposal.id, null);
-
-    try {
-      const payment = await preflightAcceptProposalPayment(proposal.id);
-      if (payment.progress) {
-        setProposalAcceptanceProgress(proposal.id, payment.progress);
-        setProposalAcceptanceError(proposal.id, getAcceptanceError(payment.progress, null));
-      } else {
-        await refreshProposalAcceptanceStatus(proposal.id);
-      }
-      setExpandedProposalId(proposal.id);
-
-      if (payment.progress?.canFinalize) {
-        await finalizeProposalAcceptance(proposal);
-      }
-    } catch (error) {
-      console.error('Failed to pay platform fee:', error);
-      setProposalAcceptanceError(proposal.id, getErrorMessage(error, 'Failed to pay platform fee'));
-    } finally {
-      setProcessingProposalId(null);
-      setProcessingStep((current) => (
-        current?.proposalId === proposal.id && current.step === 'platformFee'
-          ? null
-          : current
-      ));
     }
   };
 
@@ -390,23 +199,16 @@ export const ReviewProposalsPage = () => {
               const address = proposal.freelancerAddress || '';
               const profile = address ? profilesByAddress[address] : undefined;
               const reviews = address ? reviewsByAddress[address] || [] : [];
-              const acceptanceProgress = acceptanceProgressByProposal[proposal.id];
-              const paymentBreakdown = getProposalPaymentBreakdown(proposal, acceptanceProgress);
-              const acceptanceError = getAcceptanceError(acceptanceProgress, acceptanceErrorsByProposal[proposal.id] || null);
+              const acceptanceError = acceptanceErrorsByProposal[proposal.id] || null;
               const rating = reviews.length
                 ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1)
                 : '0.0';
               const displayName = profile ? toDisplayName(profile) : toDisplayName({ name: proposal.freelancerName, username: proposal.freelancerUsername, stxAddress: address || `freelancer-${proposal.freelancerId}` });
               const freelancerProfilePath = getUserProfilePath(profile || { username: proposal.freelancerUsername, stxAddress: address || undefined });
+              const canFundEscrow = proposal.status === 'accepted' && project?.status !== 'active';
               const canAcceptProposal = proposal.status === 'pending';
-              const hasCompletedBothPayments = Boolean(acceptanceProgress?.canFinalize);
               const isProcessingThisProposal = processingProposalId === proposal.id;
-              const isProcessingCompensation = processingStep?.proposalId === proposal.id && processingStep.step === 'compensation';
-              const isProcessingPlatformFee = processingStep?.proposalId === proposal.id && processingStep.step === 'platformFee';
-              const isFinalizingAcceptance = processingStep?.proposalId === proposal.id && processingStep.step === 'finalize';
               const isBlockedByOtherAcceptedProposal = Boolean(acceptedProposal && acceptedProposal.id !== proposal.id && project?.status !== 'active');
-              const compensationLocked = acceptanceProgress?.compensation.status === 'confirmed' || acceptanceProgress?.compensation.status === 'pending';
-              const platformFeeLocked = acceptanceProgress?.platformFee.status === 'confirmed';
 
               return (
                 <div key={proposal.id} className="card p-6">
@@ -436,80 +238,22 @@ export const ReviewProposalsPage = () => {
                     </div>
                     <p className="text-sm text-muted leading-relaxed">{proposal.coverLetter}</p>
                   </div>
-                  {expandedProposalId === proposal.id && canAcceptProposal && (
-                    <div className="bg-ink/5 rounded-[15px] p-4 mb-6">
-                      <div className="flex items-center justify-between gap-4 mb-3">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Complete Acceptance Payments</p>
-                        <p className="font-black text-lg text-accent-cyan">{project?.tokenType}</p>
-                      </div>
-                      {paymentBreakdown ? (
-                        <>
-                          <div className="grid gap-3 sm:grid-cols-2 mb-4">
-                            <button
-                              onClick={() => handlePayClientCompensation(proposal)}
-                              disabled={compensationLocked || isProcessingThisProposal || !proposal.freelancerAddress || isBlockedByOtherAcceptedProposal}
-                              className="btn-primary py-3 justify-center disabled:opacity-50"
-                            >
-                              {acceptanceProgress?.compensation.status === 'confirmed'
-                                ? 'Client Compensation Paid'
-                                : acceptanceProgress?.compensation.status === 'pending'
-                                  ? 'Compensation Submitted'
-                                : isProcessingCompensation
-                                  ? 'Opening Wallet...'
-                                  : 'Pay Client Compensation'}
-                            </button>
-                            <button
-                              onClick={() => handlePayPlatformFee(proposal)}
-                              disabled={platformFeeLocked || isProcessingThisProposal || isBlockedByOtherAcceptedProposal}
-                              className="btn-outline py-3 justify-center disabled:opacity-50"
-                            >
-                              {acceptanceProgress?.platformFee.status === 'confirmed'
-                                ? 'Platform Fee Paid'
-                                : isProcessingPlatformFee
-                                  ? 'Opening Wallet...'
-                                  : 'Pay Platform Fee'}
-                            </button>
-                          </div>
-                          <div className="space-y-2 text-sm text-muted">
-                            <div className="flex items-center justify-between gap-4">
-                              <p>Client compensation</p>
-                              <p className="font-bold text-ink">{formatTokenAmount(paymentBreakdown.compensationAmount)} {project?.tokenType}</p>
-                            </div>
-                            <div className="flex items-center justify-between gap-4">
-                              <p>Platform fee</p>
-                              <p className="font-bold text-ink">{formatTokenAmount(paymentBreakdown.platformFeeAmount)} {project?.tokenType}</p>
-                            </div>
-                          </div>
-                          {hasCompletedBothPayments && !isFinalizingAcceptance && (
-                            <p className="text-xs text-muted mt-4">Both payments are complete. Click Accept Proposal again if final assignment does not finish automatically.</p>
-                          )}
-                          {acceptanceProgress?.compensation.status === 'pending' && (
-                            <p className="text-xs text-muted mt-4">The escrow contract call has been submitted and is being verified on-chain. You will not be charged again for this step.</p>
-                          )}
-                        </>
-                      ) : (
-                        <p className="text-sm text-muted">Unable to calculate the payment split for this proposal.</p>
-                      )}
-                      {acceptanceError && (
-                        <p className="text-xs text-red-400 mt-4">{acceptanceError}</p>
-                      )}
-                    </div>
+                  {acceptanceError && (
+                    <p className="text-xs text-red-400 mb-6">{acceptanceError}</p>
                   )}
                   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                     <button
                       onClick={() => handleAcceptProposal(proposal)}
-                      disabled={(!canAcceptProposal && !hasCompletedBothPayments) || isProcessingThisProposal || isBlockedByOtherAcceptedProposal}
+                      disabled={(!(canAcceptProposal || canFundEscrow)) || isProcessingThisProposal || isBlockedByOtherAcceptedProposal}
                       className="flex-1 btn-primary py-3 justify-center disabled:opacity-50"
                     >
-                      {proposal.status === 'accepted'
-                        ? 'Accepted'
-                        : isFinalizingAcceptance
-                          ? 'Finalizing...'
-                          : hasCompletedBothPayments
-                            ? 'Finalize Acceptance'
-                            : expandedProposalId === proposal.id
-                              ? 'Hide Payment Steps'
-                              : 'Accept Proposal'}
+                      {isProcessingThisProposal
+                        ? 'Opening Wallet...'
+                        : canFundEscrow
+                          ? 'Fund Escrow'
+                          : proposal.status === 'accepted'
+                            ? 'Accepted'
+                            : 'Accept Proposal'}
                     </button>
                     <button
                       onClick={() => handleRejectProposal(proposal.id)}
