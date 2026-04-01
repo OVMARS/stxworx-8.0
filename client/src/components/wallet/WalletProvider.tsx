@@ -97,7 +97,7 @@ export function WalletProvider({ value, children }: WalletProviderProps) {
           const data = await userSession.handlePendingSignIn();
           setUserData(data);
           const address =
-            data.profile?.stxAddress?.testnet || data.profile?.stxAddress?.mainnet || null;
+            getUserAddress() || data.profile?.stxAddress?.mainnet || data.profile?.stxAddress?.testnet || null;
           setWalletAddress(address);
           await authenticateBackendSession();
         } catch (error) {

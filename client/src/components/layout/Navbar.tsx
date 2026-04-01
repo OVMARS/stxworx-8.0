@@ -40,6 +40,7 @@ import {
   type ApiConversation,
   type ApiNotification,
 } from '../../lib/api';
+import { IS_TESTNET } from '../../lib/constants';
 import type { ApiUserProfile } from '../../types/user';
 import { platformMenuItems, type PlatformMenuItem } from './navigation';
 
@@ -131,6 +132,7 @@ const announcementSlides = [
 
 const AnnouncementBar = ({ navigate }: { navigate: (path: string) => void }) => {
   const [current, setCurrent] = useState(0);
+  const networkLabel = IS_TESTNET ? 'Testnet' : 'Mainnet';
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -151,11 +153,11 @@ const AnnouncementBar = ({ navigate }: { navigate: (path: string) => void }) => 
     }`}>
       <div className="absolute left-2 items-center gap-2 hidden md:flex">
         <span className="h-2.5 w-2.5 rounded-full bg-bg animate-pulse shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
-        <span className="text-[9px] md:text-[10px] lg:text-[11px] font-black uppercase tracking-[0.14em] text-bg bg-accent-orange/45 border border-white/35 px-2.5 py-1 rounded-[11px] shadow-[0_2px_10px_rgba(0,0,0,0.28)]">Testnet</span>
+        <span className="text-[9px] md:text-[10px] lg:text-[11px] font-black uppercase tracking-[0.14em] text-bg bg-accent-orange/45 border border-white/35 px-2.5 py-1 rounded-[11px] shadow-[0_2px_10px_rgba(0,0,0,0.28)]">{networkLabel}</span>
       </div>
       <div className="absolute left-2 bottom-1 flex items-center gap-1.5 md:hidden">
         <span className="h-1.5 w-1.5 rounded-full bg-bg animate-pulse shadow-[0_0_6px_rgba(255,255,255,0.8)]" />
-        <span className="text-[9px] font-black uppercase tracking-[0.16em] text-bg bg-accent-orange/45 border border-white/35 px-2 py-0.5 rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.25)]">Testnet</span>
+        <span className="text-[9px] font-black uppercase tracking-[0.16em] text-bg bg-accent-orange/45 border border-white/35 px-2 py-0.5 rounded-[10px] shadow-[0_2px_8px_rgba(0,0,0,0.25)]">{networkLabel}</span>
       </div>
       <AnimatePresence mode="wait">
         <motion.p

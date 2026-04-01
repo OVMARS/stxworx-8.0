@@ -12,4 +12,4 @@ deployment_fee_rate = 10
 # Enter your seed phrase and a password, then paste the encrypted mnemonic here.
 #
 # Otherwise, use the mnemonic field below:
-mnemonic = "3c8mawiZ7eVZYfUK4yg99LDL7nR6bAoYH8uLbUzyyodt1LLjPjEhwsQswCCnFUMUYc2HsKEEzDnb7FhrBQw1UrLFAC5eRBTTK2NhFhAS79ccJA4yhQqrNhpXwQ8aL3dA7RFeP6ybFkN4HyL6ZA3kiwEcSYH4zxxrTAf9uPBGU8vt2FJcKzTSRNnCG7G8TCZk6xhwA7XR4ppBmEUXDwXDmXrsJNGQrSTnktNgryF6ufLiWRwmE5tL4"
+encrypted_mnemonic = "35U5Tbygnj8PgRvSr3miRuvXjcrXEdsW6wqnAyMFsWmzS9j8KyVQgEmKvgctVHz4RDdUiCP69TvdS3UqMU9mdUpBRNQoRVAZ8Mq7wTANoNp3zG4oVtLgtJ9t6wyQuYzm6KnZDQTw"
