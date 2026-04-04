@@ -2,6 +2,7 @@ import { db } from "../db";
 import { proposals, projects, users } from "@shared/schema";
 import { distributeProjectAmount } from "../../shared/project-milestones";
 import { eq, and, ne, inArray } from "drizzle-orm";
+import type { UploadedMediaItem } from "@shared/schema";
 
  type ProposalRecord = typeof proposals.$inferSelect;
  type ProjectRecord = typeof projects.$inferSelect;
@@ -73,7 +74,7 @@ import { eq, and, ne, inArray } from "drizzle-orm";
  }
 
 export const proposalService = {
-  async create(data: { projectId: number; freelancerId: number; coverLetter: string; proposedAmount: string }) {
+  async create(data: { projectId: number; freelancerId: number; coverLetter: string; proposedAmount: string; attachments?: UploadedMediaItem[] }) {
     // Check for existing proposal from same freelancer on same project
     const [existing] = await db
       .select()
@@ -103,6 +104,7 @@ export const proposalService = {
         freelancerId: proposals.freelancerId,
         coverLetter: proposals.coverLetter,
         proposedAmount: proposals.proposedAmount,
+        attachments: proposals.attachments,
         status: proposals.status,
         createdAt: proposals.createdAt,
         updatedAt: proposals.updatedAt,

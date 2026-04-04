@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 export const proposalRoutes = Router();
 
 // Protected
+proposalRoutes.post("/upload", requireAuth, requireRole("freelancer"), proposalController.uploadAttachment);
 proposalRoutes.post("/", requireAuth, requireRole("freelancer"), proposalController.create);
 proposalRoutes.get("/project/:projectId", requireAuth, proposalController.getByProject);
 proposalRoutes.get("/my", requireAuth, proposalController.getMy);

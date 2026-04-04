@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Star } from 'lucide-react';
+import { ChevronRight, ExternalLink, Paperclip, Star } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   acceptProposal,
@@ -12,8 +12,10 @@ import {
   getUserProfilePath,
   getUserProfile,
   getUserReviews,
+  toApiAssetUrl,
   toDisplayName,
   type ApiProposal,
+  type ApiUploadedMediaItem,
 } from '../lib/api';
 import { createEscrowForProject } from '../lib/escrow';
 import type { ApiProject } from '../types/job';
@@ -21,6 +23,67 @@ import type { ApiUserProfile, ApiUserReview } from '../types/user';
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function formatAttachmentSize(size: number) {
+  if (size >= 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return `${Math.max(1, Math.round(size / 1024))} KB`;
+}
+
+function isImageAttachment(attachment: ApiUploadedMediaItem) {
+  return attachment.mimeType.startsWith('image/');
+}
+
+function isVideoAttachment(attachment: ApiUploadedMediaItem) {
+  return attachment.mimeType.startsWith('video/');
+}
+
+function AttachmentList({ attachments, title }: { attachments?: ApiUploadedMediaItem[] | null; title: string }) {
+  if (!attachments?.length) {
+    return null;
+  }
+
+  return (
+    <div className="mb-6 rounded-[15px] border border-border bg-ink/5 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Paperclip size={14} className="text-accent-orange" />
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted">{title} ({attachments.length})</p>
+      </div>
+      <div className="space-y-2">
+        {attachments.map((attachment, index) => {
+          const assetUrl = toApiAssetUrl(attachment.url);
+
+          return (
+            <div key={`${attachment.url}-${index}`} className="rounded-[12px] border border-border bg-surface p-3">
+              {isImageAttachment(attachment) ? (
+                <a href={assetUrl} target="_blank" rel="noreferrer" className="block mb-3 overflow-hidden rounded-[12px] border border-border bg-bg">
+                  <img src={assetUrl} alt={attachment.fileName} className="w-full max-h-64 object-cover" />
+                </a>
+              ) : null}
+              {isVideoAttachment(attachment) ? (
+                <video src={assetUrl} controls className="w-full mb-3 rounded-[12px] border border-border bg-bg max-h-64" preload="metadata" />
+              ) : null}
+              <a
+                href={assetUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between gap-3 transition-colors hover:text-accent-orange"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold">{attachment.fileName}</p>
+                  <p className="truncate text-xs text-muted">{attachment.mimeType} • {formatAttachmentSize(attachment.size)}</p>
+                </div>
+                <ExternalLink size={14} className="shrink-0 text-muted" />
+              </a>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export const ReviewProposalsPage = () => {
@@ -228,6 +291,7 @@ export const ReviewProposalsPage = () => {
                     </div>
                     <p className="text-sm text-muted leading-relaxed">{proposal.coverLetter}</p>
                   </div>
+                  <AttachmentList attachments={proposal.attachments} title="Proposal Attachments" />
                   {acceptanceError && (
                     <p className="text-xs text-red-400 mb-6">{acceptanceError}</p>
                   )}

@@ -5,8 +5,32 @@ import { db } from "../db";
 import { users } from "@shared/schema";
 import { eq, inArray } from "drizzle-orm";
 import { refundService } from "../services/refund.service";
+import { z } from "zod";
+import { saveUploadedMedia } from "../services/uploaded-media.service";
+
+const uploadJobMediaSchema = z.object({
+  dataUrl: z.string().min(1),
+  fileName: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(255),
+  size: z.number().int().positive().max(10 * 1024 * 1024),
+});
 
 export const projectController = {
+  async uploadAttachment(req: Request, res: Response) {
+    try {
+      const result = uploadJobMediaSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Validation error", errors: result.error.errors });
+      }
+
+      const uploaded = await saveUploadedMedia(result.data, "jobs");
+      return res.status(201).json(uploaded);
+    } catch (error: any) {
+      console.error("Upload job media error:", error);
+      return res.status(400).json({ message: error.message || "Failed to upload job media" });
+    }
+  },
+
   /** Resolve clientAddress/freelancerAddress by joining user IDs */
   async _enrichWithAddresses(projects: any[]) {
     const userIds = new Set<number>();

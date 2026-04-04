@@ -5,6 +5,13 @@ export interface ApiCategory {
   subcategories: string[];
 }
 
+export interface ApiUploadedMediaItem {
+  url: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface ApiRefundRecord {
   id: number;
   projectId: number;
@@ -64,6 +71,7 @@ export interface ApiProject {
   daoCut?: string | number | null;
   onChainId?: number | null;
   escrowTxId?: string | null;
+  attachments?: ApiUploadedMediaItem[] | null;
   status: string;
   budget?: string | number;
   refundSummary?: ApiRefundSummary;
@@ -93,5 +101,6 @@ export interface AppJob {
   status: string;
   clientAddress?: string;
   freelancerAddress?: string;
+  attachments?: ApiUploadedMediaItem[];
   milestones: AppJobMilestone[];
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, createContext, useContext, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import type { UserSession } from '@stacks/connect';
-import { createProject, createProposal, getCategories, submitMilestone, startConversation, getConversationMessages, sendConversationMessage, getUserProfile, getCurrentUser, getUserProfilePath, toApiAssetUrl, toDisplayName, formatRelativeTime, type ApiConversationMessage } from './lib/api';
+import { createProject, createProposal, getCategories, submitMilestone, startConversation, getConversationMessages, sendConversationMessage, getUserProfile, getCurrentUser, getUserProfilePath, toApiAssetUrl, toDisplayName, formatRelativeTime, uploadProjectAttachment, uploadProposalAttachment, type ApiConversationMessage, type ApiUploadedMediaItem, type UploadedMediaInput } from './lib/api';
 import { convertAmount, getUSDValue } from './lib/currency';
 import { completeEscrowMilestone } from './lib/escrow';
 import type { ApiCategory } from './types/job';
@@ -66,6 +66,43 @@ const formatCurrencyInputValue = (amount: number, currency: SupportedCurrency) =
   .toFixed(getCurrencyPrecision(currency))
   .replace(/\.0+$/, '')
   .replace(/(\.\d*?)0+$/, '$1');
+
+const MAX_MEDIA_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_MEDIA_UPLOAD_COUNT = 5;
+const MEDIA_UPLOAD_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,.doc,.docx,.zip';
+
+const fileToUploadedMediaInput = (file: File) => new Promise<UploadedMediaInput>((resolve, reject) => {
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    if (typeof reader.result !== 'string') {
+      reject(new Error('Failed to read the selected file.'));
+      return;
+    }
+
+    resolve({
+      dataUrl: reader.result,
+      fileName: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      size: file.size,
+    });
+  };
+
+  reader.onerror = () => reject(new Error('Failed to read the selected file.'));
+  reader.readAsDataURL(file);
+});
+
+const formatUploadSize = (size: number) => {
+  if (size >= 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return `${Math.max(1, Math.round(size / 1024))} KB`;
+};
+
+const isImageUpload = (attachment: ApiUploadedMediaItem) => attachment.mimeType.startsWith('image/');
+
+const isVideoUpload = (attachment: ApiUploadedMediaItem) => attachment.mimeType.startsWith('video/');
 
 export interface StatProps {
     value: string;
@@ -584,11 +621,21 @@ export const MessageModal = ({ isOpen, onClose, recipientAddress }: { isOpen: bo
       const [isConvertingBudget, setIsConvertingBudget] = useState(false);
       const [pendingCurrency, setPendingCurrency] = useState<SupportedCurrency | null>(null);
       const [usdValue, setUsdValue] = useState<number | null>(null);
+      const [attachments, setAttachments] = useState<ApiUploadedMediaItem[]>([]);
+      const [uploadError, setUploadError] = useState('');
+      const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
+      const [isDraggingAttachments, setIsDraggingAttachments] = useState(false);
+      const attachmentInputRef = useRef<HTMLInputElement | null>(null);
 
       useEffect(() => {
         if (!isOpen) {
           return;
         }
+
+        setAttachments([]);
+        setUploadError('');
+        setIsUploadingAttachments(false);
+        setIsDraggingAttachments(false);
 
         getCategories()
           .then((rows) => {
@@ -676,7 +723,7 @@ export const MessageModal = ({ isOpen, onClose, recipientAddress }: { isOpen: bo
       };
 
       const handlePostJob = async () => {
-        if (!title.trim() || !description.trim() || !totalBudget || !selectedCategory || milestoneTitles.slice(0, milestones).some((entry) => !entry.trim())) {
+        if (!title.trim() || !description.trim() || !totalBudget || !selectedCategory || milestoneTitles.slice(0, milestones).some((entry) => !entry.trim()) || isUploadingAttachments) {
           return;
         }
 
@@ -687,6 +734,7 @@ export const MessageModal = ({ isOpen, onClose, recipientAddress }: { isOpen: bo
             description: description.trim(),
             category: selectedCategory,
             subcategory: selectedSubcategory || undefined,
+            attachments,
             tokenType: currency,
             numMilestones: milestones,
             milestone1Title: milestoneTitles[0].trim(),
@@ -702,6 +750,8 @@ export const MessageModal = ({ isOpen, onClose, recipientAddress }: { isOpen: bo
             milestone4Description: milestones >= 4 ? milestoneTitles[3].trim() : undefined,
             milestone4Amount: milestones >= 4 ? amountPerMilestone : undefined,
           });
+          setAttachments([]);
+          setUploadError('');
           onCreated?.();
           onClose();
         } catch (error) {
@@ -709,6 +759,52 @@ export const MessageModal = ({ isOpen, onClose, recipientAddress }: { isOpen: bo
         } finally {
           setIsSubmitting(false);
         }
+      };
+
+      const handleJobFilesSelected = async (fileList: FileList | null) => {
+        const files = Array.from(fileList || []);
+        if (!files.length) {
+          return;
+        }
+
+        if (attachments.length + files.length > MAX_MEDIA_UPLOAD_COUNT) {
+          setUploadError(`You can upload up to ${MAX_MEDIA_UPLOAD_COUNT} files.`);
+          return;
+        }
+
+        const oversizedFile = files.find((file) => file.size > MAX_MEDIA_UPLOAD_BYTES);
+        if (oversizedFile) {
+          setUploadError(`${oversizedFile.name} exceeds the 10MB limit.`);
+          return;
+        }
+
+        setUploadError('');
+        setIsUploadingAttachments(true);
+        try {
+          const uploadedFiles: ApiUploadedMediaItem[] = [];
+
+          for (const file of files) {
+            const input = await fileToUploadedMediaInput(file);
+            const uploaded = await uploadProjectAttachment(input);
+            uploadedFiles.push(uploaded);
+          }
+
+          setAttachments((current) => [...current, ...uploadedFiles]);
+        } catch (error) {
+          setUploadError(error instanceof Error ? error.message : 'Failed to upload attachments.');
+        } finally {
+          setIsUploadingAttachments(false);
+          setIsDraggingAttachments(false);
+        }
+      };
+
+      const handleJobAttachmentInput = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        await handleJobFilesSelected(event.target.files);
+        event.target.value = '';
+      };
+
+      const removeJobAttachment = (index: number) => {
+        setAttachments((current) => current.filter((_, currentIndex) => currentIndex !== index));
       };
 
       return (
@@ -784,11 +880,58 @@ export const MessageModal = ({ isOpen, onClose, recipientAddress }: { isOpen: bo
 
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-widest text-muted mb-2">Attachments</label>
-                    <div className="border-2 border-dashed border-border rounded-[15px] p-6 text-center hover:border-accent-orange transition-colors cursor-pointer">
+                    <input
+                      ref={attachmentInputRef}
+                      type="file"
+                      accept={MEDIA_UPLOAD_ACCEPT}
+                      multiple
+                      className="hidden"
+                      onChange={handleJobAttachmentInput}
+                    />
+                    <div
+                      onClick={() => attachmentInputRef.current?.click()}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        setIsDraggingAttachments(true);
+                      }}
+                      onDragLeave={(event) => {
+                        event.preventDefault();
+                        setIsDraggingAttachments(false);
+                      }}
+                      onDrop={async (event) => {
+                        event.preventDefault();
+                        await handleJobFilesSelected(event.dataTransfer.files);
+                      }}
+                      className={`border-2 border-dashed rounded-[15px] p-6 text-center transition-colors cursor-pointer ${isDraggingAttachments ? 'border-accent-orange bg-accent-orange/5' : 'border-border hover:border-accent-orange'} ${isUploadingAttachments ? 'opacity-70' : ''}`}
+                    >
                       <Upload size={24} className="mx-auto mb-2 text-muted" />
-                      <p className="text-sm font-bold">Click to upload or drag and drop</p>
-                      <p className="text-xs text-muted">PDF, DOCX, PNG, JPG up to 10MB</p>
+                      <p className="text-sm font-bold">{isUploadingAttachments ? 'Uploading...' : 'Click to upload or drag and drop'}</p>
+                      <p className="text-xs text-muted">Images, video, PDF, DOCX, or ZIP up to 10MB</p>
                     </div>
+                    {uploadError ? <p className="mt-2 text-xs text-accent-red">{uploadError}</p> : null}
+                    {attachments.length > 0 ? (
+                      <div className="mt-3 space-y-2">
+                        {attachments.map((attachment, index) => (
+                          <div key={`${attachment.url}-${index}`} className="flex items-center justify-between gap-3 rounded-[15px] border border-border bg-ink/5 px-4 py-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold truncate">{attachment.fileName}</p>
+                              <p className="text-xs text-muted truncate">{attachment.mimeType} • {formatUploadSize(attachment.size)}</p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <a href={toApiAssetUrl(attachment.url)} target="_blank" rel="noreferrer" className="text-[10px] font-bold uppercase tracking-widest text-accent-orange hover:underline" onClick={(event) => event.stopPropagation()}>
+                                Open
+                              </a>
+                              <button type="button" onClick={(event) => {
+                                event.stopPropagation();
+                                removeJobAttachment(index);
+                              }} className="w-8 h-8 rounded-[12px] border border-border flex items-center justify-center hover:border-accent-red hover:text-accent-red transition-colors">
+                                <X size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div>
@@ -913,7 +1056,7 @@ export const MessageModal = ({ isOpen, onClose, recipientAddress }: { isOpen: bo
 
                   <button 
                     onClick={handlePostJob}
-                    disabled={isSubmitting || isConvertingBudget}
+                    disabled={isSubmitting || isConvertingBudget || isUploadingAttachments}
                     className="w-full btn-primary py-4 justify-center"
                   >
                     {isSubmitting ? 'Posting...' : 'Post Job'}
@@ -928,16 +1071,24 @@ export const MessageModal = ({ isOpen, onClose, recipientAddress }: { isOpen: bo
 export const JobApplyModal = ({ isOpen, onClose, job, onSubmitted }: { isOpen: boolean, onClose: () => void, job?: any, onSubmitted?: () => void | Promise<void> }) => {
       const [amount, setAmount] = useState(typeof job?.rawBudget === 'number' ? job.rawBudget : 1000);
       const [milestones, setMilestones] = useState(2);
-      const [useEscrow, setUseEscrow] = useState(true);
       const [coverLetter, setCoverLetter] = useState('');
       const [isSubmitting, setIsSubmitting] = useState(false);
       const [usdValue, setUsdValue] = useState<number | null>(null);
+      const [attachments, setAttachments] = useState<ApiUploadedMediaItem[]>([]);
+      const [uploadError, setUploadError] = useState('');
+      const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
+      const [isDraggingAttachments, setIsDraggingAttachments] = useState(false);
+      const attachmentInputRef = useRef<HTMLInputElement | null>(null);
       const currency = (job?.currency || 'STX') as SupportedCurrency;
 
       useEffect(() => {
         if (isOpen) {
           setCoverLetter('');
           setIsSubmitting(false);
+          setAttachments([]);
+          setUploadError('');
+          setIsUploadingAttachments(false);
+          setIsDraggingAttachments(false);
           // Set initial amount and currency from job if available
           if (job) {
             setAmount(typeof job.rawBudget === 'number' ? job.rawBudget : 1000);
@@ -964,8 +1115,54 @@ export const JobApplyModal = ({ isOpen, onClose, job, onSubmitted }: { isOpen: b
       const platformFee = amount * 0.1;
       const freelancerAmount = amount * 0.9;
 
+      const handleProposalFilesSelected = async (fileList: FileList | null) => {
+        const files = Array.from(fileList || []);
+        if (!files.length) {
+          return;
+        }
+
+        if (attachments.length + files.length > MAX_MEDIA_UPLOAD_COUNT) {
+          setUploadError(`You can upload up to ${MAX_MEDIA_UPLOAD_COUNT} files.`);
+          return;
+        }
+
+        const oversizedFile = files.find((file) => file.size > MAX_MEDIA_UPLOAD_BYTES);
+        if (oversizedFile) {
+          setUploadError(`${oversizedFile.name} exceeds the 10MB limit.`);
+          return;
+        }
+
+        setUploadError('');
+        setIsUploadingAttachments(true);
+        try {
+          const uploadedFiles: ApiUploadedMediaItem[] = [];
+
+          for (const file of files) {
+            const input = await fileToUploadedMediaInput(file);
+            const uploaded = await uploadProposalAttachment(input);
+            uploadedFiles.push(uploaded);
+          }
+
+          setAttachments((current) => [...current, ...uploadedFiles]);
+        } catch (error) {
+          setUploadError(error instanceof Error ? error.message : 'Failed to upload attachments.');
+        } finally {
+          setIsUploadingAttachments(false);
+          setIsDraggingAttachments(false);
+        }
+      };
+
+      const handleProposalAttachmentInput = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        await handleProposalFilesSelected(event.target.files);
+        event.target.value = '';
+      };
+
+      const removeProposalAttachment = (index: number) => {
+        setAttachments((current) => current.filter((_, currentIndex) => currentIndex !== index));
+      };
+
       const handleSubmitProposal = async () => {
-        if (!job?.id || !coverLetter.trim() || amount <= 0) {
+        if (!job?.id || !coverLetter.trim() || amount <= 0 || isUploadingAttachments) {
           return;
         }
 
@@ -980,7 +1177,10 @@ export const JobApplyModal = ({ isOpen, onClose, job, onSubmitted }: { isOpen: b
             projectId: job.id,
             coverLetter: coverLetter.trim(),
             proposedAmount,
+            attachments,
           });
+          setAttachments([]);
+          setUploadError('');
           await onSubmitted?.();
           onClose();
         } catch (error) {
@@ -1024,21 +1224,46 @@ export const JobApplyModal = ({ isOpen, onClose, job, onSubmitted }: { isOpen: b
                         </span>
                       ))}
                     </div>
+                    {job.attachments?.length ? (
+                      <div className="mt-5 rounded-[15px] border border-border bg-surface p-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Upload size={14} className="text-accent-orange" />
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-muted">Attached Media ({job.attachments.length})</p>
+                        </div>
+                        <div className="space-y-3">
+                          {job.attachments.map((attachment: ApiUploadedMediaItem, index: number) => {
+                            const assetUrl = toApiAssetUrl(attachment.url);
+
+                            return (
+                              <div key={`${attachment.url}-${index}`} className="rounded-[12px] border border-border bg-ink/5 p-3">
+                                {isImageUpload(attachment) ? (
+                                  <a href={assetUrl} target="_blank" rel="noreferrer" className="block mb-3 overflow-hidden rounded-[12px] border border-border bg-bg">
+                                    <img src={assetUrl} alt={attachment.fileName} className="w-full max-h-56 object-cover" />
+                                  </a>
+                                ) : null}
+                                {isVideoUpload(attachment) ? (
+                                  <video src={assetUrl} controls className="w-full mb-3 rounded-[12px] border border-border bg-bg max-h-56" preload="metadata" />
+                                ) : null}
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-bold truncate">{attachment.fileName}</p>
+                                    <p className="text-xs text-muted truncate">{attachment.mimeType} • {formatUploadSize(attachment.size)}</p>
+                                  </div>
+                                  <a href={assetUrl} target="_blank" rel="noreferrer" className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-accent-orange hover:underline">
+                                    Open
+                                  </a>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 )}
                 
                 <div className="space-y-6">
                   {/* Escrow Selection */}
-                  <div className="flex items-center justify-between p-4 border border-border rounded-[15px] bg-ink/5">
-                    <div>
-                      <h4 className="font-bold">Use Smart Contract Escrow</h4>
-                      <p className="text-xs text-muted">Secure your payment in a smart contract until milestones are met.</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" checked={useEscrow} onChange={() => setUseEscrow(!useEscrow)} />
-                      <div className="w-11 h-6 bg-border peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent-cyan"></div>
-                    </label>
-                  </div>
 
                   {/* Description */}
                   <div>
@@ -1054,11 +1279,58 @@ export const JobApplyModal = ({ isOpen, onClose, job, onSubmitted }: { isOpen: b
                   {/* Attachment */}
                   <div>
                     <label className="block text-sm font-bold mb-2">Attachment</label>
-                    <div className="border-2 border-dashed border-border rounded-[15px] p-6 text-center hover:border-accent-orange transition-colors cursor-pointer">
+                    <input
+                      ref={attachmentInputRef}
+                      type="file"
+                      accept={MEDIA_UPLOAD_ACCEPT}
+                      multiple
+                      className="hidden"
+                      onChange={handleProposalAttachmentInput}
+                    />
+                    <div
+                      onClick={() => attachmentInputRef.current?.click()}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        setIsDraggingAttachments(true);
+                      }}
+                      onDragLeave={(event) => {
+                        event.preventDefault();
+                        setIsDraggingAttachments(false);
+                      }}
+                      onDrop={async (event) => {
+                        event.preventDefault();
+                        await handleProposalFilesSelected(event.dataTransfer.files);
+                      }}
+                      className={`border-2 border-dashed rounded-[15px] p-6 text-center transition-colors cursor-pointer ${isDraggingAttachments ? 'border-accent-orange bg-accent-orange/5' : 'border-border hover:border-accent-orange'} ${isUploadingAttachments ? 'opacity-70' : ''}`}
+                    >
                       <Folder size={24} className="mx-auto mb-2 text-muted" />
-                      <p className="text-sm font-bold">Click to upload or drag and drop</p>
-                      <p className="text-xs text-muted">PDF, DOCX, or ZIP (Max 10MB)</p>
+                      <p className="text-sm font-bold">{isUploadingAttachments ? 'Uploading...' : 'Click to upload or drag and drop'}</p>
+                      <p className="text-xs text-muted">Images, video, PDF, DOCX, or ZIP (Max 10MB)</p>
                     </div>
+                    {uploadError ? <p className="mt-2 text-xs text-accent-red">{uploadError}</p> : null}
+                    {attachments.length > 0 ? (
+                      <div className="mt-3 space-y-2">
+                        {attachments.map((attachment, index) => (
+                          <div key={`${attachment.url}-${index}`} className="flex items-center justify-between gap-3 rounded-[15px] border border-border bg-ink/5 px-4 py-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold truncate">{attachment.fileName}</p>
+                              <p className="text-xs text-muted truncate">{attachment.mimeType} • {formatUploadSize(attachment.size)}</p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <a href={toApiAssetUrl(attachment.url)} target="_blank" rel="noreferrer" className="text-[10px] font-bold uppercase tracking-widest text-accent-orange hover:underline" onClick={(event) => event.stopPropagation()}>
+                                Open
+                              </a>
+                              <button type="button" onClick={(event) => {
+                                event.stopPropagation();
+                                removeProposalAttachment(index);
+                              }} className="w-8 h-8 rounded-[12px] border border-border flex items-center justify-center hover:border-accent-red hover:text-accent-red transition-colors">
+                                <X size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
 
                   {/* Milestones */}
@@ -1176,7 +1448,7 @@ export const JobApplyModal = ({ isOpen, onClose, job, onSubmitted }: { isOpen: b
 
                   <button
                     onClick={handleSubmitProposal}
-                    disabled={isSubmitting || !coverLetter.trim()}
+                    disabled={isSubmitting || !coverLetter.trim() || isUploadingAttachments}
                     className="btn-primary w-full py-4 text-lg"
                   >
                     {isSubmitting ? 'Submitting...' : 'Submit Proposal'}

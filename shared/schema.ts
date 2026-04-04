@@ -79,6 +79,13 @@ export const BOUNTY_SUBMISSION_STATUSES = [
   "rejected",
 ] as const;
 
+export const uploadedMediaItemSchema = z.object({
+  url: z.string().min(1).max(500),
+  fileName: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(255),
+  size: z.number().int().positive().max(10 * 1024 * 1024),
+});
+
 // Tables
 
 export const users = mysqlTable("users", {
@@ -140,6 +147,7 @@ export const projects = mysqlTable("projects", {
   freelancerId: bigint("freelancer_id", { mode: "number", unsigned: true }).references(() => users.id),
   onChainId: int("on_chain_id"),
   escrowTxId: varchar("escrow_tx_id", { length: 100 }),
+  attachments: json("attachments").$type<UploadedMediaItem[]>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -154,6 +162,7 @@ export const proposals = mysqlTable("proposals", {
     .notNull(),
   coverLetter: text("cover_letter").notNull(),
   proposedAmount: decimal("proposed_amount", { precision: 18, scale: 8 }).notNull(),
+  attachments: json("attachments").$type<UploadedMediaItem[]>(),
   status: mysqlEnum("status", [...PROPOSAL_STATUSES]).default("pending").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -473,6 +482,7 @@ export const insertProjectSchema = createInsertSchema(projects, {
   milestone3Amount: z.string().optional(),
   milestone4Title: z.string().max(200).optional(),
   milestone4Amount: z.string().optional(),
+  attachments: z.array(uploadedMediaItemSchema).max(5).optional(),
 }).omit({ id: true, createdAt: true, updatedAt: true, daoCut: true, status: true, freelancerId: true, onChainId: true, escrowTxId: true });
 
 export const selectProjectSchema = createSelectSchema(projects);
@@ -480,6 +490,7 @@ export const selectProjectSchema = createSelectSchema(projects);
 export const insertProposalSchema = createInsertSchema(proposals, {
   coverLetter: z.string().min(1),
   proposedAmount: z.string().regex(/^\d+(\.\d{1,8})?$/).refine((value) => Number(value) > 0),
+  attachments: z.array(uploadedMediaItemSchema).max(5).optional(),
 }).omit({ id: true, createdAt: true, updatedAt: true, status: true });
 
 export const selectProposalSchema = createSelectSchema(proposals);
@@ -581,6 +592,7 @@ export type SocialPost = typeof socialPosts.$inferSelect;
 export type PostLike = typeof postLikes.$inferSelect;
 export type PostComment = typeof postComments.$inferSelect;
 export type InsertPostComment = z.infer<typeof insertPostCommentSchema>;
+export type UploadedMediaItem = z.infer<typeof uploadedMediaItemSchema>;
 export type UserConnection = typeof userConnections.$inferSelect;
 export type Bounty = typeof bounties.$inferSelect;
 export type BountySubmission = typeof bountySubmissions.$inferSelect;

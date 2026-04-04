@@ -1,10 +1,10 @@
 import type { ApiLeaderboardEntry } from '../types/leaderboard';
-import type { ApiCategory, ApiProject, ApiRefundRecord, ApiRefundSummary, AppJob, AppJobMilestone } from '../types/job';
+import type { ApiCategory, ApiProject, ApiRefundRecord, ApiRefundSummary, ApiUploadedMediaItem, AppJob, AppJobMilestone } from '../types/job';
 import type { AuthenticatedUserResponse, ApiUserProfile, ApiUserReview, ApiUsernameAvailability, UserRole } from '../types/user';
 import { decodeSocialPostId, encodeSocialPostId } from '@shared/social-post-permalink';
 
 // Re-export types for convenience
-export type { ApiProject, ApiCategory, AppJob, AppJobMilestone, ApiRefundRecord, ApiRefundSummary };
+export type { ApiProject, ApiCategory, ApiUploadedMediaItem, AppJob, AppJobMilestone, ApiRefundRecord, ApiRefundSummary };
 
 const rawBase = (import.meta.env.VITE_API_BASE_URL || '/api').trim();
 const API_BASE_URL = rawBase.endsWith('/api')
@@ -30,6 +30,7 @@ export interface ApiProposal {
   freelancerId: number;
   coverLetter: string;
   proposedAmount: string;
+  attachments?: ApiUploadedMediaItem[] | null;
   status: 'pending' | 'accepted' | 'rejected' | 'withdrawn';
   createdAt?: string;
   updatedAt?: string;
@@ -79,6 +80,7 @@ export interface CreateProjectInput {
   description: string;
   category: string;
   subcategory?: string;
+  attachments?: ApiUploadedMediaItem[];
   tokenType: 'STX' | 'sBTC' | 'USDCx';
   numMilestones: number;
   milestone1Title: string;
@@ -99,6 +101,14 @@ export interface CreateProposalInput {
   projectId: number;
   coverLetter: string;
   proposedAmount: string;
+  attachments?: ApiUploadedMediaItem[];
+}
+
+export interface UploadedMediaInput {
+  dataUrl: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
 }
 
 export interface SubmitMilestoneInput {
@@ -655,6 +665,7 @@ export function toAppJob(project: ApiProject): AppJob {
     status: project.status,
     clientAddress: project.clientAddress,
     freelancerAddress: project.freelancerAddress,
+    attachments: project.attachments || [],
     milestones: getMilestones(project),
   };
 }
@@ -672,6 +683,13 @@ export async function getProjects(filters?: {
 
 export async function createProject(input: CreateProjectInput) {
   return apiRequest<ApiProject>('/projects', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function uploadProjectAttachment(input: UploadedMediaInput) {
+  return apiRequest<ApiUploadedMediaItem>('/projects/upload', {
     method: 'POST',
     body: JSON.stringify(input),
   });
@@ -766,6 +784,13 @@ export async function updateMyProfile(input: UpdateMyProfileInput) {
 
 export async function createProposal(input: CreateProposalInput) {
   return apiRequest<ApiProposal>('/proposals', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function uploadProposalAttachment(input: UploadedMediaInput) {
+  return apiRequest<ApiUploadedMediaItem>('/proposals/upload', {
     method: 'POST',
     body: JSON.stringify(input),
   });

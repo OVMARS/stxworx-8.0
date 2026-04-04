@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ShieldCheck, Star } from 'lucide-react';
+import { ExternalLink, Paperclip, ShieldCheck, Star } from 'lucide-react';
 import * as Shared from '../shared';
 import {
   approveProjectRefund,
@@ -21,8 +21,10 @@ import {
   getUserProfile,
   getUserReviews,
   requestProjectRefund,
+  toApiAssetUrl,
   toAppJob,
   type ApiProposal,
+  type ApiUploadedMediaItem,
   withdrawProposal,
 } from '../lib/api';
 import { approveEscrowRefund, cancelEscrowRefundRequest, requestEscrowRefund } from '../lib/escrow';
@@ -44,6 +46,67 @@ type MilestoneView = {
 type PendingProposalView = ApiProposal & {
   projectTitle?: string;
 };
+
+function formatAttachmentSize(size: number) {
+  if (size >= 1024 * 1024) {
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  return `${Math.max(1, Math.round(size / 1024))} KB`;
+}
+
+function isImageAttachment(attachment: ApiUploadedMediaItem) {
+  return attachment.mimeType.startsWith('image/');
+}
+
+function isVideoAttachment(attachment: ApiUploadedMediaItem) {
+  return attachment.mimeType.startsWith('video/');
+}
+
+function AttachmentList({ attachments, title }: { attachments?: ApiUploadedMediaItem[] | null; title: string }) {
+  if (!attachments?.length) {
+    return null;
+  }
+
+  return (
+    <div className="mb-4 rounded-[15px] border border-border bg-ink/5 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Paperclip size={14} className="text-accent-orange" />
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted">{title} ({attachments.length})</p>
+      </div>
+      <div className="space-y-2">
+        {attachments.map((attachment, index) => {
+          const assetUrl = toApiAssetUrl(attachment.url);
+
+          return (
+            <div key={`${attachment.url}-${index}`} className="rounded-[12px] border border-border bg-surface p-3">
+              {isImageAttachment(attachment) ? (
+                <a href={assetUrl} target="_blank" rel="noreferrer" className="block mb-3 overflow-hidden rounded-[12px] border border-border bg-bg">
+                  <img src={assetUrl} alt={attachment.fileName} className="w-full max-h-64 object-cover" />
+                </a>
+              ) : null}
+              {isVideoAttachment(attachment) ? (
+                <video src={assetUrl} controls className="w-full mb-3 rounded-[12px] border border-border bg-bg max-h-64" preload="metadata" />
+              ) : null}
+              <a
+                href={assetUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between gap-3 transition-colors hover:text-accent-orange"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold">{attachment.fileName}</p>
+                  <p className="truncate text-xs text-muted">{attachment.mimeType} • {formatAttachmentSize(attachment.size)}</p>
+                </div>
+                <ExternalLink size={14} className="shrink-0 text-muted" />
+              </a>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function buildMilestones(project: ApiProject, submissions: ApiMilestoneSubmission[]): MilestoneView[] {
   const mapped = toAppJob(project).milestones;
@@ -411,6 +474,7 @@ export const DashboardPage = () => {
                           <p className="text-xs text-muted mt-3 break-all">Refund Tx: {refundSummary.current.txId}</p>
                         )}
                       </div>
+                      <AttachmentList attachments={project.attachments} title="Job Attachments" />
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border pt-4">
                         <div>
                           <p className="text-[10px] text-muted uppercase tracking-widest font-bold mb-1">Escrow Status</p>
@@ -466,6 +530,7 @@ export const DashboardPage = () => {
                           ))}
                         </ul>
                       </div>
+                      <AttachmentList attachments={project.attachments} title="Job Attachments" />
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-border pt-4">
                         <div className="flex-1">
                           <p className="text-[10px] text-muted uppercase tracking-widest font-bold mb-1">Budget</p>
@@ -516,6 +581,7 @@ export const DashboardPage = () => {
                             ))}
                           </ul>
                         </div>
+                        <AttachmentList attachments={project.attachments} title="Job Attachments" />
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-border pt-4">
                           <div className="flex-1">
                             <p className="text-[10px] text-muted uppercase tracking-widest font-bold mb-1">Budget</p>
@@ -627,6 +693,7 @@ export const DashboardPage = () => {
                       </span>
                     </div>
                     <p className="text-sm text-muted leading-relaxed mb-4">{proposal.coverLetter}</p>
+                    <AttachmentList attachments={proposal.attachments} title="Proposal Attachments" />
                     <div className="flex justify-end">
                       <button
                         onClick={() => handleWithdrawProposal(proposal.id)}
@@ -693,6 +760,7 @@ export const DashboardPage = () => {
                           ))}
                         </div>
                       </div>
+                      <AttachmentList attachments={project.attachments} title="Project Attachments" />
 
                       <div className="mb-6 rounded-[15px] border border-border bg-ink/5 p-4">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -770,6 +838,7 @@ export const DashboardPage = () => {
                             ))}
                           </div>
                         </div>
+                        <AttachmentList attachments={project.attachments} title="Project Attachments" />
 
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border pt-4">
                           <div>

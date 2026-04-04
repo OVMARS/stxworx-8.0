@@ -5,6 +5,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 export const projectRoutes = Router();
 
 // Protected — must come before /:id routes
+projectRoutes.post("/upload", requireAuth, requireRole("client"), projectController.uploadAttachment);
 projectRoutes.get("/my/posted", requireAuth, projectController.myPosted);
 projectRoutes.get("/my/active", requireAuth, projectController.myActive);
 projectRoutes.get("/my/completed", requireAuth, projectController.myCompleted);

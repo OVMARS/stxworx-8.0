@@ -3,11 +3,14 @@ import { z } from "zod";
 import { proposalService } from "../services/proposal.service";
 import { projectService } from "../services/project.service";
 import { stacksTransactionService } from "../services/stacks-transaction.service";
+import { uploadedMediaItemSchema } from "@shared/schema";
+import { saveUploadedMedia } from "../services/uploaded-media.service";
 
 const createProposalSchema = z.object({
   projectId: z.number().int(),
   coverLetter: z.string().min(1),
   proposedAmount: z.string().regex(/^\d+(\.\d{1,8})?$/).refine((value) => Number(value) > 0),
+  attachments: z.array(uploadedMediaItemSchema).max(5).optional(),
 });
 
 const acceptProposalSchema = z.object({
@@ -15,7 +18,29 @@ const acceptProposalSchema = z.object({
   onChainId: z.number().int().optional(),
 });
 
+const uploadProposalMediaSchema = z.object({
+  dataUrl: z.string().min(1),
+  fileName: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(255),
+  size: z.number().int().positive().max(10 * 1024 * 1024),
+});
+
 export const proposalController = {
+  async uploadAttachment(req: Request, res: Response) {
+    try {
+      const result = uploadProposalMediaSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Validation error", errors: result.error.errors });
+      }
+
+      const uploaded = await saveUploadedMedia(result.data, "proposals");
+      return res.status(201).json(uploaded);
+    } catch (error: any) {
+      console.error("Upload proposal media error:", error);
+      return res.status(400).json({ message: error.message || "Failed to upload proposal media" });
+    }
+  },
+
   // POST /api/proposals
   async create(req: Request, res: Response) {
     try {
@@ -34,6 +59,7 @@ export const proposalController = {
         freelancerId: req.user!.id,
         coverLetter: result.data.coverLetter,
         proposedAmount: result.data.proposedAmount,
+        attachments: result.data.attachments,
       });
 
       return res.status(201).json(proposal);
