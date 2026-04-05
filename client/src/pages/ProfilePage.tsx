@@ -15,12 +15,15 @@ import { PostComposerInput } from '../components/social/PostComposerInput';
 import { PostText } from '../components/social/PostText';
 import {
   acceptConnection,
+  blockUser,
+  cancelConnection,
   checkUsernameAvailability,
   createSocialPost,
   deleteSocialPost,
   declineConnection,
   formatRelativeTime,
   formatTokenAmount,
+  getConnectionRelationship,
   getConnectionSuggestions,
   getConnections,
   getMyBountyDashboard,
@@ -35,9 +38,11 @@ import {
   getUserNfts,
   getUserProjects,
   getUserReviews,
+  removeConnection,
   requestConnection,
   toggleSocialPostPin,
   toggleSocialPostLike,
+  unblockUser,
   updateSocialPost,
   updateMyProfile,
   type ApiBountyDashboard,
@@ -238,6 +243,8 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
   const [reviews, setReviews] = useState<ApiUserReview[]>([]);
   const [timelinePosts, setTimelinePosts] = useState<ApiSocialPost[]>([]);
   const [connections, setConnections] = useState<ApiConnection[]>([]);
+  const [relationship, setRelationship] = useState<ApiConnection | null>(null);
+  const [isRelationshipMenuOpen, setIsRelationshipMenuOpen] = useState(false);
   const [connectionSuggestions, setConnectionSuggestions] = useState<Array<Pick<ApiUserProfile, 'id' | 'stxAddress' | 'name' | 'username' | 'role' | 'isActive' | 'specialty' | 'avatar'>>>([]);
   const [bountyDashboard, setBountyDashboard] = useState<ApiBountyDashboard | null>(null);
   const [nfts, setNfts] = useState<ApiReputationNft[]>([]);
@@ -327,6 +334,7 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
           setReviews([]);
           setTimelinePosts([]);
           setConnections([]);
+          setRelationship(null);
           setConnectionSuggestions([]);
           setBountyDashboard(null);
           setNfts([]);
@@ -342,12 +350,13 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
           throw new Error('User not found');
         }
 
-        const [projectResponse, reviewResponse, socialResponse, nftResponse, connectionResponse, suggestionResponse, bountyResponse] = await Promise.all([
+        const [projectResponse, reviewResponse, socialResponse, nftResponse, connectionResponse, relationshipResponse, suggestionResponse, bountyResponse] = await Promise.all([
           getUserProjects(profileResponse.stxAddress).catch(() => []),
           getUserReviews(profileResponse.stxAddress).catch(() => []),
           getSocialPosts(profileResponse.stxAddress).catch(() => []),
           getUserNfts(profileResponse.stxAddress).catch(() => []),
           isSignedIn ? getConnections().catch(() => []) : Promise.resolve([]),
+          isSignedIn && walletAddress && walletAddress !== profileResponse.stxAddress ? getConnectionRelationship(profileResponse.id).catch(() => null) : Promise.resolve(null),
           isSignedIn && walletAddress === profileResponse.stxAddress ? getConnectionSuggestions().catch(() => []) : Promise.resolve([]),
           isSignedIn && walletAddress === profileResponse.stxAddress ? getMyBountyDashboard().catch(() => null) : Promise.resolve(null),
         ]);
@@ -361,6 +370,7 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
         setReviews(reviewResponse);
         setTimelinePosts(sortTimelinePosts(socialResponse));
         setConnections(connectionResponse);
+        setRelationship(relationshipResponse);
         setConnectionSuggestions(suggestionResponse);
         setBountyDashboard(bountyResponse);
         setNfts(nftResponse);
@@ -394,6 +404,7 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
         setReviews([]);
         setTimelinePosts([]);
         setConnections([]);
+        setRelationship(null);
         setConnectionSuggestions([]);
         setBountyDashboard(null);
         setNfts([]);
@@ -492,6 +503,28 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
     if (timelineImageInputRef.current) {
       timelineImageInputRef.current.value = '';
     }
+  };
+
+  const refreshConnectionState = async (targetProfile?: ApiUserProfile | null) => {
+    const nextProfile = targetProfile || profile;
+
+    if (!isSignedIn || !nextProfile) {
+      setConnections([]);
+      setRelationship(null);
+      setConnectionSuggestions([]);
+      return;
+    }
+
+    const isViewingOwnProfile = Boolean(walletAddress && walletAddress === nextProfile.stxAddress);
+    const [connectionResponse, relationshipResponse, suggestionResponse] = await Promise.all([
+      getConnections().catch(() => []),
+      isViewingOwnProfile ? Promise.resolve(null) : getConnectionRelationship(nextProfile.id).catch(() => null),
+      isViewingOwnProfile ? getConnectionSuggestions().catch(() => []) : Promise.resolve([]),
+    ]);
+
+    setConnections(connectionResponse);
+    setRelationship(relationshipResponse);
+    setConnectionSuggestions(suggestionResponse);
   };
 
   useEffect(() => {
@@ -763,27 +796,69 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
     }
 
     try {
-      await requestConnection(nextUserId);
+      const updated = await requestConnection(nextUserId);
+      setRelationship(updated);
       setConnectionSuggestions((current) => current.filter((entry) => entry.id !== nextUserId));
-      const refreshed = await getConnections();
-      setConnections(refreshed);
+      await refreshConnectionState(profile);
       setGlobalError('');
     } catch (error) {
       setGlobalError(error instanceof Error ? error.message : 'Failed to request connection.');
     }
   };
 
-  const handleRespondToConnection = async (connectionId: number, action: 'accept' | 'decline') => {
+  const handleConnectionAction = async (connectionId: number | null, action: 'accept' | 'decline' | 'cancel' | 'remove') => {
+    if (!connectionId || !profile) {
+      return;
+    }
+
     try {
       const updated = action === 'accept'
         ? await acceptConnection(connectionId)
-        : await declineConnection(connectionId);
+        : action === 'decline'
+          ? await declineConnection(connectionId)
+          : action === 'cancel'
+            ? await cancelConnection(connectionId)
+            : await removeConnection(connectionId);
 
-      setConnections((current) =>
-        current.map((connection) => (connection.id === updated.id ? { ...connection, status: updated.status } : connection)),
-      );
+      setRelationship(updated);
+      await refreshConnectionState(profile);
+      setGlobalError('');
     } catch (error) {
       setGlobalError(error instanceof Error ? error.message : 'Failed to update connection.');
+    }
+  };
+
+  const handleBlockUser = async (userId?: number) => {
+    const nextUserId = userId || profile?.id;
+
+    if (!nextUserId || !profile) {
+      return;
+    }
+
+    try {
+      const updated = await blockUser(nextUserId);
+      setRelationship(updated);
+      setIsRelationshipMenuOpen(false);
+      await refreshConnectionState(profile);
+      setGlobalError('');
+    } catch (error) {
+      setGlobalError(error instanceof Error ? error.message : 'Failed to block user.');
+    }
+  };
+
+  const handleUnblockUser = async (restrictionId: number | null | undefined) => {
+    if (!restrictionId || !profile) {
+      return;
+    }
+
+    try {
+      const updated = await unblockUser(restrictionId);
+      setRelationship(updated);
+      setIsRelationshipMenuOpen(false);
+      await refreshConnectionState(profile);
+      setGlobalError('');
+    } catch (error) {
+      setGlobalError(error instanceof Error ? error.message : 'Failed to unblock user.');
     }
   };
 
@@ -826,10 +901,15 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
   const websiteHref = normalizedWebsite || '#';
   const hasInvalidLinks = portfolioLinks.some((link) => link.url.trim().length > 0 && !normalizeUrl(link.url));
   const canSaveProfile = isOwnProfile && !isSaving && !hasInvalidLinks && usernameStatus !== 'checking' && usernameStatus !== 'taken' && usernameStatus !== 'invalid';
-  const acceptedConnections = isOwnProfile ? connections.filter((connection) => connection.status === 'accepted') : [];
-  const incomingConnectionRequests = isOwnProfile ? connections.filter((connection) => connection.status === 'pending' && connection.direction === 'incoming') : [];
-  const outgoingConnectionRequests = isOwnProfile ? connections.filter((connection) => connection.status === 'pending' && connection.direction === 'outgoing') : [];
-  const relationship = !isOwnProfile && profile ? connections.find((connection) => connection.otherUser?.id === profile.id) || null : null;
+  const acceptedConnections = isOwnProfile ? connections.filter((connection) => connection.relationshipState === 'accepted') : [];
+  const incomingConnectionRequests = isOwnProfile ? connections.filter((connection) => connection.relationshipState === 'incoming') : [];
+  const outgoingConnectionRequests = isOwnProfile ? connections.filter((connection) => connection.relationshipState === 'outgoing') : [];
+  const blockedConnections = isOwnProfile ? connections.filter((connection) => connection.relationshipState === 'blocked') : [];
+  const disconnectedConnections = isOwnProfile ? connections.filter((connection) => connection.relationshipState === 'disconnected') : [];
+  const visibleConnectionSuggestions = connectionSuggestions.filter((suggestion) => suggestion.id !== profile?.id && suggestion.stxAddress !== walletAddress);
+  const relationshipState = relationship?.relationshipState || 'none';
+  const canMessageProfile = relationshipState !== 'blocked';
+  const canShowRelationshipMenu = isSignedIn && relationshipState !== 'blocked';
 
   useEffect(() => {
     if (!tabs.includes(activeTab)) {
@@ -1168,12 +1248,61 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
                         <Edit2 size={16} /> {isEditing ? (isSaving ? 'Saving...' : 'Save') : 'Edit Profile'}
                       </button>
                     ) : !isEditing ? (
-                      <>
-                        {isSignedIn ? <button onClick={() => handleRequestConnection()} disabled={relationship?.status === 'accepted' || relationship?.status === 'pending'} className="btn-primary hidden md:block disabled:opacity-50 disabled:cursor-not-allowed">{relationship?.status === 'accepted' ? 'Connected' : relationship?.status === 'pending' ? 'Request sent' : 'Connect'}</button> : null}
-                        {isSignedIn ? <button onClick={() => { setRecipientAddress(profile.stxAddress); setIsMessageModalOpen(true); }} className="p-3 rounded-[15px] border border-border hover:bg-ink/10 transition-colors">
+                      <div className="flex items-center justify-end gap-2 md:max-w-[320px]">
+                        {isSignedIn ? (
+                          relationshipState === 'incoming' ? (
+                            <>
+                              <button onClick={() => handleConnectionAction(relationship?.connectionId ?? null, 'accept')} className="btn-primary hidden md:block">Accept</button>
+                              <button onClick={() => handleConnectionAction(relationship?.connectionId ?? null, 'decline')} className="btn-outline hidden md:block">Decline</button>
+                            </>
+                          ) : relationshipState === 'outgoing' ? (
+                            <>
+                              <button disabled className="btn-primary hidden md:block disabled:opacity-50 disabled:cursor-not-allowed">Request sent</button>
+                              <button onClick={() => handleConnectionAction(relationship?.connectionId ?? null, 'cancel')} className="btn-outline hidden md:block">Cancel</button>
+                            </>
+                          ) : relationshipState === 'accepted' ? (
+                            <>
+                              <button disabled className="btn-primary hidden md:block disabled:opacity-50 disabled:cursor-not-allowed">Connected</button>
+                              <button onClick={() => handleConnectionAction(relationship?.connectionId ?? null, 'remove')} className="btn-outline hidden md:block">Remove</button>
+                            </>
+                          ) : relationshipState === 'blocked' ? (
+                            relationship?.restriction?.direction === 'outgoing' ? (
+                              <button onClick={() => handleUnblockUser(relationship?.restriction?.id)} className="btn-outline hidden md:block">Unblock</button>
+                            ) : (
+                              <button disabled className="btn-outline hidden md:block disabled:opacity-50 disabled:cursor-not-allowed">Blocked</button>
+                            )
+                          ) : relationshipState === 'disconnected' ? (
+                            <button onClick={() => handleRequestConnection()} className="btn-primary hidden md:block">Reconnect</button>
+                          ) : (
+                            <button onClick={() => handleRequestConnection()} className="btn-primary hidden md:block">Connect</button>
+                          )
+                        ) : null}
+                        {isSignedIn && canMessageProfile ? <button onClick={() => { setRecipientAddress(profile.stxAddress); setIsMessageModalOpen(true); }} className="p-3 rounded-[15px] border border-border hover:bg-ink/10 transition-colors">
                           <MessageSquare size={20} />
                         </button> : null}
-                      </>
+                        {canShowRelationshipMenu ? (
+                          <div className="relative">
+                            <button
+                              onClick={() => setIsRelationshipMenuOpen((current) => !current)}
+                              className="p-3 rounded-[15px] border border-border hover:bg-ink/10 transition-colors"
+                              title="More actions"
+                            >
+                              <MoreHorizontal size={20} />
+                            </button>
+                            {isRelationshipMenuOpen ? (
+                              <div className="absolute right-0 top-full z-20 mt-2 w-44 overflow-hidden rounded-[15px] border border-border bg-surface shadow-xl">
+                                <button
+                                  onClick={() => handleBlockUser()}
+                                  className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm text-accent-red hover:bg-ink/5"
+                                >
+                                  <AlertTriangle size={16} />
+                                  Block user
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 </div>
@@ -1762,6 +1891,7 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
                               <Link to={conversationPath} className="btn-outline py-2 px-4 text-xs">Chat</Link>
+                              <button onClick={() => handleConnectionAction(connection.connectionId, 'remove')} className="btn-outline py-2 px-4 text-xs">Remove</button>
                               <span className="text-xs font-bold text-accent-cyan">Connected</span>
                             </div>
                           </div>
@@ -1776,11 +1906,11 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
                       <h3 className="font-bold text-lg mb-4">Incoming Requests</h3>
                       <div className="space-y-4">
                         {incomingConnectionRequests.map((connection) => (
-                          <div key={connection.id} className="border border-border rounded-[15px] p-4">
+                          <div key={connection.connectionId || connection.id} className="border border-border rounded-[15px] p-4">
                             <Link to={getUserProfilePath(connection.otherUser)} className="font-bold text-sm mb-1 inline-block hover:text-accent-orange transition-colors">{toDisplayName(connection.otherUser) || 'User'}</Link>
                             <div className="flex gap-2 mt-3">
-                              <button onClick={() => handleRespondToConnection(connection.id, 'accept')} className="btn-primary py-2 px-4 text-xs">Accept</button>
-                              <button onClick={() => handleRespondToConnection(connection.id, 'decline')} className="btn-outline py-2 px-4 text-xs">Decline</button>
+                              <button onClick={() => handleConnectionAction(connection.connectionId, 'accept')} className="btn-primary py-2 px-4 text-xs">Accept</button>
+                              <button onClick={() => handleConnectionAction(connection.connectionId, 'decline')} className="btn-outline py-2 px-4 text-xs">Decline</button>
                             </div>
                           </div>
                         ))}
@@ -1791,7 +1921,7 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
                     <div className="card p-6">
                       <h3 className="font-bold text-lg mb-4">Suggested Connections</h3>
                       <div className="space-y-4">
-                        {connectionSuggestions.map((suggestion) => (
+                        {visibleConnectionSuggestions.map((suggestion) => (
                           <div key={suggestion.id} className="border border-border rounded-[15px] p-4 flex items-center justify-between gap-4">
                             <div>
                               <Link to={getUserProfilePath(suggestion)} className="font-bold text-sm hover:text-accent-orange transition-colors">{toDisplayName(suggestion)}</Link>
@@ -1800,7 +1930,7 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
                             <button onClick={() => handleRequestConnection(suggestion.id)} className="btn-outline py-2 px-4 text-xs">Connect</button>
                           </div>
                         ))}
-                        {connectionSuggestions.length === 0 && <p className="text-sm text-muted">No suggestions right now.</p>}
+                        {visibleConnectionSuggestions.length === 0 && <p className="text-sm text-muted">No suggestions right now.</p>}
                       </div>
                     </div>
                   </div>
@@ -1810,12 +1940,53 @@ export const ProfilePage = ({ userRole }: { userRole: UserRole | null }) => {
                       <h3 className="font-bold text-lg mb-4">Pending Requests</h3>
                       <div className="space-y-4">
                         {outgoingConnectionRequests.map((connection) => (
-                          <div key={connection.id} className="border border-border rounded-[15px] p-4 flex items-center justify-between gap-4">
+                          <div key={connection.connectionId || connection.id} className="border border-border rounded-[15px] p-4 flex items-center justify-between gap-4">
                             <div>
                               <Link to={getUserProfilePath(connection.otherUser)} className="font-bold text-sm hover:text-accent-orange transition-colors">{toDisplayName(connection.otherUser) || 'User'}</Link>
                               <p className="text-[10px] text-muted uppercase tracking-widest">{connection.otherUser?.role || 'User'}</p>
                             </div>
-                            <span className="text-xs font-bold text-muted">Pending</span>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <button onClick={() => handleConnectionAction(connection.connectionId, 'cancel')} className="btn-outline py-2 px-4 text-xs">Cancel</button>
+                              <span className="text-xs font-bold text-muted">Pending</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {blockedConnections.length > 0 && (
+                    <div className="card p-6">
+                      <h3 className="font-bold text-lg mb-4">Blocked Users</h3>
+                      <div className="space-y-4">
+                        {blockedConnections.map((connection) => (
+                          <div key={`${connection.relationshipState}-${connection.otherUser?.id || connection.restriction?.id}`} className="border border-border rounded-[15px] p-4 flex items-center justify-between gap-4">
+                            <div>
+                              <Link to={getUserProfilePath(connection.otherUser)} className="font-bold text-sm hover:text-accent-orange transition-colors">{toDisplayName(connection.otherUser) || 'User'}</Link>
+                              <p className="text-[10px] text-muted uppercase tracking-widest">{connection.relationshipState}</p>
+                            </div>
+                            {connection.restriction?.direction === 'outgoing' ? (
+                              <button onClick={() => handleUnblockUser(connection.restriction?.id)} className="btn-outline py-2 px-4 text-xs">Unblock</button>
+                            ) : (
+                              <span className="text-xs font-bold text-muted">Incoming</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {disconnectedConnections.length > 0 && (
+                    <div className="card p-6">
+                      <h3 className="font-bold text-lg mb-4">Disconnected</h3>
+                      <div className="space-y-4">
+                        {disconnectedConnections.map((connection) => (
+                          <div key={`${connection.connectionId || connection.id}-${connection.otherUser?.id}`} className="border border-border rounded-[15px] p-4 flex items-center justify-between gap-4">
+                            <div>
+                              <Link to={getUserProfilePath(connection.otherUser)} className="font-bold text-sm hover:text-accent-orange transition-colors">{toDisplayName(connection.otherUser) || 'User'}</Link>
+                              <p className="text-[10px] text-muted uppercase tracking-widest">{connection.status || 'disconnected'}</p>
+                            </div>
+                            <button onClick={() => handleRequestConnection(connection.otherUser?.id)} className="btn-outline py-2 px-4 text-xs">Reconnect</button>
                           </div>
                         ))}
                       </div>

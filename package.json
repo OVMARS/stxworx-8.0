@@ -10,6 +10,7 @@
     "build": "vite build --config client/vite.config.ts && esbuild backend/index.ts --platform=node --packages=external --bundle --format=cjs --outfile=dist/backend/index.cjs",
     "start": "cross-env NODE_ENV=production node dist/backend/index.cjs",
     "check": "tsc",
+    "test:unit": "vitest run --config vitest.config.ts",
     "db:push": "drizzle-kit push --config=backend/drizzle.config.ts",
     "db:generate": "drizzle-kit generate --config=backend/drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config=backend/drizzle.config.ts",

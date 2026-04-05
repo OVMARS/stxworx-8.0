@@ -17,6 +17,14 @@ function getNotificationMeta(type: ApiNotification['type']) {
       return { icon: Briefcase, color: 'bg-accent-orange' };
     case 'proposal_accepted':
       return { icon: CheckCircle2, color: 'bg-accent-blue' };
+    case 'connection_request_received':
+      return { icon: Bell, color: 'bg-accent-orange' };
+    case 'connection_request_accepted':
+      return { icon: CheckCircle2, color: 'bg-accent-cyan' };
+    case 'connection_request_declined':
+    case 'connection_request_cancelled':
+    case 'connection_removed':
+      return { icon: AlertTriangle, color: 'bg-accent-red' };
     case 'milestone_submitted':
       return { icon: Bell, color: 'bg-accent-red' };
     case 'milestone_approved':

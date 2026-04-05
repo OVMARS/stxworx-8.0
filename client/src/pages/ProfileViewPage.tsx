@@ -254,9 +254,9 @@ export function ProfileViewPage({ userRole }: { userRole: UserRole | null }) {
     const amount = projects.reduce((total, project) => total + Number(project.budget || 0), 0);
     return Number.isFinite(amount) ? amount.toLocaleString() : '0';
   }, [projects]);
-  const acceptedConnections = useMemo(() => connections.filter((connection) => connection.status === 'accepted'), [connections]);
-  const incomingRequests = useMemo(() => connections.filter((connection) => connection.status === 'pending' && connection.direction === 'incoming'), [connections]);
-  const outgoingRequests = useMemo(() => connections.filter((connection) => connection.status === 'pending' && connection.direction === 'outgoing'), [connections]);
+  const acceptedConnections = useMemo(() => connections.filter((connection) => connection.relationshipState === 'accepted'), [connections]);
+  const incomingRequests = useMemo(() => connections.filter((connection) => connection.relationshipState === 'incoming'), [connections]);
+  const outgoingRequests = useMemo(() => connections.filter((connection) => connection.relationshipState === 'outgoing'), [connections]);
 
   const loadProfilePage = useCallback(async () => {
     setIsLoading(true);
@@ -717,9 +717,9 @@ export function ProfileViewPage({ userRole }: { userRole: UserRole | null }) {
                 ) : (
                   <>
                     {isSignedIn ? (
-                      <button type="button" onClick={handleRequestConnection} disabled={relationship?.status === 'accepted' || relationship?.status === 'pending'} className="btn-primary inline-flex w-full justify-center sm:w-auto items-center gap-2 px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
+                      <button type="button" onClick={handleRequestConnection} disabled={relationship?.relationshipState === 'accepted' || relationship?.relationshipState === 'outgoing' || relationship?.relationshipState === 'incoming'} className="btn-primary inline-flex w-full justify-center sm:w-auto items-center gap-2 px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50">
                         <UserPlus size={16} />
-                        {relationship?.status === 'accepted' ? 'Connected' : relationship?.status === 'pending' ? 'Request sent' : 'Connect'}
+                        {relationship?.relationshipState === 'accepted' ? 'Connected' : relationship?.relationshipState === 'incoming' ? 'Respond to request' : relationship?.relationshipState === 'outgoing' ? 'Request sent' : 'Connect'}
                       </button>
                     ) : null}
                     {isSignedIn ? (
@@ -1056,14 +1056,14 @@ export function ProfileViewPage({ userRole }: { userRole: UserRole | null }) {
                       <div className="space-y-3">
                         <p className="text-sm font-bold text-ink">Pending requests</p>
                         {incomingRequests.map((connection) => (
-                          <div key={connection.id} className="flex items-center justify-between gap-3 rounded-[18px] border border-border bg-bg px-4 py-4">
+                          <div key={connection.connectionId || connection.id || connection.otherUser?.id || Math.random()} className="flex items-center justify-between gap-3 rounded-[18px] border border-border bg-bg px-4 py-4">
                             <div>
                               <p className="font-bold text-ink">{toDisplayName(connection.otherUser)}</p>
                               <p className="text-xs text-muted">{connection.otherUser?.specialty || connection.otherUser?.role || 'Member'}</p>
                             </div>
                             <div className="flex gap-2">
-                              <button type="button" onClick={() => handleRespondToConnection(connection.id, 'accept')} className="btn-primary px-4 py-2 text-xs">Accept</button>
-                              <button type="button" onClick={() => handleRespondToConnection(connection.id, 'decline')} className="btn-outline px-4 py-2 text-xs">Decline</button>
+                              <button type="button" onClick={() => connection.connectionId ? handleRespondToConnection(connection.connectionId, 'accept') : undefined} className="btn-primary px-4 py-2 text-xs">Accept</button>
+                              <button type="button" onClick={() => connection.connectionId ? handleRespondToConnection(connection.connectionId, 'decline') : undefined} className="btn-outline px-4 py-2 text-xs">Decline</button>
                             </div>
                           </div>
                         ))}

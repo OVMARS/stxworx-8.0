@@ -217,7 +217,7 @@ Verification:
 - [ ] Add block or restrict-user support for abuse prevention.
 - [ ] Add mutual-friend or relevant suggestion logic if social growth is important.
 - [ ] Add clear CTAs on profile pages for request sent / accept / decline / connected.
-- [ ] Gate messaging rules consistently against accepted connections when `connections_only` is selected.
+- [ ] Gate messaging rules consistently against accepted connections when `connections_only` is selected in the settings.
 - [ ] Add tests for request, accept, decline, cancel, remove, and duplicate request scenarios.
 
 ### P1 - X and email connections

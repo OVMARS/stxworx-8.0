@@ -142,6 +142,15 @@ export const messagesService = {
       throw new Error("Recipient not available");
     }
 
+    const relationship = await connectionsService.getRelationship(senderId, recipientId);
+
+    if (relationship.relationshipState === "blocked") {
+      if (relationship.restriction?.direction === "outgoing") {
+        throw new Error("You have blocked this user");
+      }
+      throw new Error("This user has blocked you");
+    }
+
     const [settings] = await db.select().from(userSettings).where(eq(userSettings.userId, recipientId));
     const messagingOption = settings?.messagingOption ?? "everyone";
 
@@ -149,7 +158,7 @@ export const messagesService = {
       throw new Error("This user only accepts messages from clients");
     }
 
-    if (messagingOption === "connections_only" && !(await connectionsService.areConnected(senderId, recipientId))) {
+    if (messagingOption === "connections_only" && relationship.relationshipState !== "accepted") {
       throw new Error("This user only accepts messages from connections");
     }
   },
@@ -313,6 +322,22 @@ export const messagesService = {
 
   async sendMessage(conversationId: number, userId: number, input: SendMessageInput) {
     await this.assertConversationAccess(conversationId, userId);
+
+    const [otherParticipant] = await db
+      .select({ userId: conversationParticipants.userId })
+      .from(conversationParticipants)
+      .where(
+        and(
+          eq(conversationParticipants.conversationId, conversationId),
+          ne(conversationParticipants.userId, userId),
+        ),
+      );
+
+    if (!otherParticipant) {
+      throw new Error("Conversation participant not found");
+    }
+
+    await this.assertCanMessage(userId, otherParticipant.userId);
 
     const body = input.body?.trim() ?? "";
     const savedAttachment = input.attachment ? await saveChatAttachment(input.attachment) : null;

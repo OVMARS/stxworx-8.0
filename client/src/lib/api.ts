@@ -67,6 +67,12 @@ export interface ApiNotification {
     | 'refund_refunded'
     | 'proposal_received'
     | 'proposal_accepted'
+    | 'connection_request_received'
+    | 'connection_request_accepted'
+    | 'connection_request_declined'
+    | 'connection_request_cancelled'
+    | 'connection_removed'
+    | 'review_received'
     | 'project_completed';
   title: string;
   message: string;
@@ -237,14 +243,29 @@ export interface ApiSocialComment {
 }
 
 export interface ApiConnection {
-  id: number;
-  requesterId: number;
-  addresseeId: number;
-  status: 'pending' | 'accepted' | 'declined';
-  direction: 'incoming' | 'outgoing';
+  id: number | null;
+  connectionId: number | null;
+  requesterId: number | null;
+  addresseeId: number | null;
+  status: 'pending' | 'accepted' | 'declined' | 'cancelled' | 'removed' | null;
+  direction: 'incoming' | 'outgoing' | 'none';
+  relationshipState: 'none' | 'outgoing' | 'incoming' | 'accepted' | 'blocked' | 'disconnected';
+  availableActions: Array<'send_request' | 'accept_request' | 'decline_request' | 'cancel_request' | 'remove_connection' | 'block_user' | 'unblock_user'>;
   otherUser?: Pick<ApiUserProfile, 'id' | 'stxAddress' | 'name' | 'username' | 'role' | 'isActive' | 'specialty' | 'avatar'> | null;
-  createdAt?: string;
-  updatedAt?: string;
+  restriction?: {
+    id: number;
+    type: 'blocked';
+    direction: 'incoming' | 'outgoing';
+    reason?: string | null;
+    createdAt?: string;
+    updatedAt?: string;
+  } | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  acceptedAt?: string | null;
+  declinedAt?: string | null;
+  cancelledAt?: string | null;
+  removedAt?: string | null;
 }
 
 export interface ApiConversation {
@@ -916,6 +937,10 @@ export async function getConnectionSuggestions() {
   return apiRequest<Array<Pick<ApiUserProfile, 'id' | 'stxAddress' | 'name' | 'username' | 'role' | 'isActive' | 'specialty' | 'avatar'>>>('/connections/suggestions', { method: 'GET' });
 }
 
+export async function getConnectionRelationship(userId: number) {
+  return apiRequest<ApiConnection>(`/connections/relationship/${userId}`, { method: 'GET' });
+}
+
 export async function requestConnection(userId: number) {
   return apiRequest<ApiConnection>('/connections/request', {
     method: 'POST',
@@ -929,6 +954,25 @@ export async function acceptConnection(connectionId: number) {
 
 export async function declineConnection(connectionId: number) {
   return apiRequest<ApiConnection>(`/connections/${connectionId}/decline`, { method: 'PATCH' });
+}
+
+export async function cancelConnection(connectionId: number) {
+  return apiRequest<ApiConnection>(`/connections/${connectionId}/cancel`, { method: 'PATCH' });
+}
+
+export async function removeConnection(connectionId: number) {
+  return apiRequest<ApiConnection>(`/connections/${connectionId}/remove`, { method: 'PATCH' });
+}
+
+export async function blockUser(userId: number, reason?: string) {
+  return apiRequest<ApiConnection>('/connections/block', {
+    method: 'POST',
+    body: JSON.stringify({ userId, reason }),
+  });
+}
+
+export async function unblockUser(restrictionId: number) {
+  return apiRequest<ApiConnection>(`/connections/blocks/${restrictionId}/unblock`, { method: 'PATCH' });
 }
 
 export async function getConversations() {

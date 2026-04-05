@@ -171,7 +171,7 @@ export const MessagesPage = () => {
 
       const acceptedConnections = dedupeCandidates(
         connectionList
-          .filter((connection) => connection.status === 'accepted')
+          .filter((connection) => connection.relationshipState === 'accepted')
           .map((connection) => connection.otherUser)
           .filter(isChatCandidate),
       );

@@ -67,6 +67,11 @@ export const CONNECTION_STATUSES = [
   "pending",
   "accepted",
   "declined",
+  "cancelled",
+  "removed",
+] as const;
+export const CONNECTION_RESTRICTION_TYPES = [
+  "blocked",
 ] as const;
 export const BOUNTY_STATUSES = [
   "open",
@@ -266,6 +271,11 @@ export const NOTIFICATION_TYPES = [
   "refund_refunded",
   "proposal_received",
   "proposal_accepted",
+  "connection_request_received",
+  "connection_request_accepted",
+  "connection_request_declined",
+  "connection_request_cancelled",
+  "connection_removed",
   "project_completed",
   "review_received",
 ] as const;
@@ -409,6 +419,25 @@ export const userConnections = mysqlTable("user_connections", {
     .references(() => users.id)
     .notNull(),
   status: mysqlEnum("status", [...CONNECTION_STATUSES]).default("pending").notNull(),
+  acceptedAt: timestamp("accepted_at"),
+  declinedAt: timestamp("declined_at"),
+  cancelledAt: timestamp("cancelled_at"),
+  removedAt: timestamp("removed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const userConnectionRestrictions = mysqlTable("user_connection_restrictions", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  sourceUserId: bigint("source_user_id", { mode: "number", unsigned: true })
+    .references(() => users.id)
+    .notNull(),
+  targetUserId: bigint("target_user_id", { mode: "number", unsigned: true })
+    .references(() => users.id)
+    .notNull(),
+  type: mysqlEnum("type", [...CONNECTION_RESTRICTION_TYPES]).notNull(),
+  reason: text("reason"),
+  liftedAt: timestamp("lifted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -555,6 +584,13 @@ export const insertNotificationSchema = createInsertSchema(notifications, {
 
 export const selectNotificationSchema = createSelectSchema(notifications);
 
+export const insertUserConnectionRestrictionSchema = createInsertSchema(userConnectionRestrictions, {
+  type: z.enum([...CONNECTION_RESTRICTION_TYPES]),
+  reason: z.string().optional(),
+}).omit({ id: true, createdAt: true, updatedAt: true, liftedAt: true });
+
+export const selectUserConnectionRestrictionSchema = createSelectSchema(userConnectionRestrictions);
+
 export const insertPostCommentSchema = createInsertSchema(postComments, {
   content: z.string().trim().min(1).max(2000),
 }).omit({ id: true, createdAt: true });
@@ -594,6 +630,8 @@ export type PostComment = typeof postComments.$inferSelect;
 export type InsertPostComment = z.infer<typeof insertPostCommentSchema>;
 export type UploadedMediaItem = z.infer<typeof uploadedMediaItemSchema>;
 export type UserConnection = typeof userConnections.$inferSelect;
+export type UserConnectionRestriction = typeof userConnectionRestrictions.$inferSelect;
+export type InsertUserConnectionRestriction = z.infer<typeof insertUserConnectionRestrictionSchema>;
 export type Bounty = typeof bounties.$inferSelect;
 export type BountySubmission = typeof bountySubmissions.$inferSelect;
 export type PlatformSetting = typeof platformSettings.$inferSelect;

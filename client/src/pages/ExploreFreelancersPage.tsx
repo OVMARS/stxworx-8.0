@@ -69,7 +69,7 @@ export const FreelancersPage = () => {
         setConnectedUserIds(
           new Set(
             rows
-              .filter((connection) => connection.status === 'accepted' && typeof connection.otherUser?.id === 'number')
+              .filter((connection) => connection.relationshipState === 'accepted' && typeof connection.otherUser?.id === 'number')
               .map((connection) => connection.otherUser!.id),
           ),
         );
