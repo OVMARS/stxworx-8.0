@@ -87,6 +87,8 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { ProPlanPage } from "./pages/ProPlanPage";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { BountiesPage } from "./pages/BountyBoardPage";
+import { PartnerPage } from "./pages/PartnerPage";
+import { ReferralLeaderboardPage } from "./pages/ReferralLeaderboardPage";
 import { Sidebar } from "./components/layout/Sidebar";
 import { TopHeader } from "./components/layout/Navbar";
 import { ReviewProposalsPage } from "./pages/ReviewProposalsPage";
@@ -448,6 +450,26 @@ export default function App() {
                       transition={{ duration: 0.4 }}
                     >
                       <Leaderboard />
+                    </motion.div>
+                  } />
+                  <Route path="/referrals" element={
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.4 }}
+                    >
+                      <PartnerPage />
+                    </motion.div>
+                  } />
+                  <Route path="/referrals/leaderboard" element={
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.4 }}
+                    >
+                      <ReferralLeaderboardPage />
                     </motion.div>
                   } />
                   <Route path="/bounties" element={

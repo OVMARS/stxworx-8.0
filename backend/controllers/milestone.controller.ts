@@ -7,6 +7,7 @@ import { projectService } from "../services/project.service";
 import { notificationService } from "../services/notification.service";
 import { refundService } from "../services/refund.service";
 import type { Project } from "@shared/schema";
+import { referralService } from "../services/referral.service";
 
 const submitSchema = z.object({
   projectId: z.number().int(),
@@ -186,6 +187,7 @@ export const milestoneController = {
       const approvedCount = allSubmissions.filter((s) => s.status === "approved").length;
       if (approvedCount >= project.numMilestones) {
         await projectService.update(project.id, { status: "completed" });
+        await referralService.recordProjectCompleted(project.id);
       }
 
       // Update freelancer earnings

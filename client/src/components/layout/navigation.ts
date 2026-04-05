@@ -11,6 +11,7 @@ export type PlatformMenuItem = {
     | 'freelancers'
     | 'bounties'
     | 'leaderboard'
+    | 'referrals'
     | 'ai-proposal'
     | 'posts'
     | 'messages'
@@ -67,6 +68,14 @@ export const platformMenuItems: PlatformMenuItem[] = [
     shortLabel: 'Ranks',
     keywords: ['rankings', 'top users', 'stats'],
     iconKey: 'leaderboard',
+  },
+  {
+    id: 'referrals',
+    label: 'Partner Program',
+    path: '/referrals',
+    shortLabel: 'Partner',
+    keywords: ['referrals', 'partner', 'commissions', 'invite', 'earn'],
+    iconKey: 'referrals',
   },
   {
     id: 'ai-proposal',

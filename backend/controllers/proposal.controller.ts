@@ -5,6 +5,7 @@ import { projectService } from "../services/project.service";
 import { stacksTransactionService } from "../services/stacks-transaction.service";
 import { uploadedMediaItemSchema } from "@shared/schema";
 import { saveUploadedMedia } from "../services/uploaded-media.service";
+import { referralService } from "../services/referral.service";
 
 const createProposalSchema = z.object({
   projectId: z.number().int(),
@@ -143,6 +144,8 @@ export const proposalController = {
         result.data.escrowTxId,
         verification.onChainId,
       );
+
+      await referralService.recordProjectEscrowFunded(accepted.projectId);
 
       return res.status(200).json(accepted);
     } catch (error: any) {

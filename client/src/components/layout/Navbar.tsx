@@ -71,6 +71,7 @@ const menuIconMap: Record<PlatformMenuItem['iconKey'], LucideIcon> = {
   freelancers: Users,
   bounties: Trophy,
   leaderboard: Star,
+  referrals: Wallet,
   'ai-proposal': Sparkles,
   posts: Newspaper,
   messages: MessageCircle,

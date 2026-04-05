@@ -22,6 +22,90 @@ export interface WalletVerificationInput {
   signature: string;
   message: string;
   role: UserRole;
+  referralCode?: string;
+}
+
+export interface ApiReferralLeaderboardEntry {
+  id: number;
+  stxAddress: string;
+  name?: string | null;
+  username?: string | null;
+  qualifiedReferrals: number;
+  pendingReferrals: number;
+  totalPayoutUsd: number;
+  createdAt?: string;
+  rank: number;
+}
+
+export interface ApiReferralCode {
+  id: number;
+  ownerId: number;
+  code: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  lastSharedAt?: string | null;
+}
+
+export interface ApiReferralProgramReferral {
+  id: number;
+  status: 'pending' | 'qualified' | 'blocked';
+  referredUser: {
+    id: number;
+    stxAddress: string;
+    name?: string | null;
+    username?: string | null;
+    role: UserRole;
+  } | null;
+  firstProjectId?: number | null;
+  firstEscrowProjectId?: number | null;
+  firstCompletedProjectId?: number | null;
+  qualifiedProjectId?: number | null;
+  totalCompletedJobs: number;
+  cumulativeCompletedSpendUsd: string;
+  firstCompletedSpendUsd?: string | null;
+  qualificationRule?: string | null;
+  blockedReason?: string | null;
+  firstSeenAt?: string;
+  qualifiedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ApiReferralProgramPayout {
+  id: number;
+  attributionId: number;
+  projectId?: number | null;
+  status: 'pending' | 'approved' | 'paid' | 'cancelled';
+  amountUsd: string;
+  eligibleSpendUsd: string;
+  payoutRate: string;
+  payoutCurrency: string;
+  createdAt?: string;
+  updatedAt?: string;
+  approvedAt?: string | null;
+  paidAt?: string | null;
+  cancelledAt?: string | null;
+}
+
+export interface ApiReferralProgramOverview {
+  code: ApiReferralCode | null;
+  summary: {
+    totalReferrals: number;
+    qualifiedReferrals: number;
+    pendingReferrals: number;
+    blockedReferrals: number;
+    totalPayoutUsd: string;
+    pendingPayoutUsd: string;
+    paidPayoutUsd: string;
+  };
+  referrals: ApiReferralProgramReferral[];
+  payouts: ApiReferralProgramPayout[];
+  policy: {
+    firstJobMinimumUsd: number;
+    totalSpendMinimumUsd: number;
+    payoutRate: number;
+  };
 }
 
 export interface ApiProposal {
@@ -551,6 +635,12 @@ export function getSocialPostShareUrl(postId: number) {
   return new URL(path, CANONICAL_WEB_ORIGIN).toString();
 }
 
+export function getReferralShareUrl(code: string) {
+  const url = new URL('/', CANONICAL_WEB_ORIGIN);
+  url.searchParams.set('ref', code);
+  return url.toString();
+}
+
 export function toApiAssetUrl(value?: string | null) {
   if (!value) {
     return '';
@@ -738,6 +828,18 @@ export async function getMyCompletedProjects() {
 
 export async function getLeaderboard() {
   return apiRequest<ApiLeaderboardEntry[]>('/users/leaderboard', { method: 'GET' });
+}
+
+export async function getReferralLeaderboard() {
+  return apiRequest<ApiReferralLeaderboardEntry[]>('/referrals/leaderboard', { method: 'GET' });
+}
+
+export async function getMyReferralProgram() {
+  return apiRequest<ApiReferralProgramOverview>('/referrals/me', { method: 'GET' });
+}
+
+export async function createOrShareReferralCode() {
+  return apiRequest<ApiReferralCode>('/referrals/code', { method: 'POST' });
 }
 
 export async function updateProject(id: number, input: Partial<CreateProjectInput>) {

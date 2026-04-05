@@ -2,6 +2,7 @@ import { type Request, type Response } from "express";
 import { z } from "zod";
 import { authService } from "../services/auth.service";
 import { getUserCookieName } from "../middleware/auth";
+import { referralService } from "../services/referral.service";
 
 const verifyWalletSchema = z.object({
   stxAddress: z.string().min(1),
@@ -9,6 +10,7 @@ const verifyWalletSchema = z.object({
   signature: z.string().min(1),
   message: z.string().min(1),
   role: z.enum(["client", "freelancer"]),
+  referralCode: z.string().trim().optional(),
 });
 
 export const authController = {
@@ -20,7 +22,18 @@ export const authController = {
         return res.status(400).json({ message: "Validation error", errors: result.error.errors });
       }
 
-      const { user, token } = await authService.verifyWalletAndLogin(result.data);
+      const { referralCode, ...walletPayload } = result.data;
+      const { user, token, isNewUser } = await authService.verifyWalletAndLogin(walletPayload);
+
+      await referralService.attributeClientReferral({
+        referralCode,
+        userId: user.id,
+        userRole: user.role,
+        stxAddress: user.stxAddress,
+        isNewUser,
+        ipAddress: req.ip || null,
+        userAgent: req.get("user-agent") || null,
+      });
 
       const isProduction = process.env.NODE_ENV === "production";
       res.cookie(getUserCookieName(), token, {

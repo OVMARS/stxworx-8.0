@@ -7,6 +7,7 @@ import { eq, inArray } from "drizzle-orm";
 import { refundService } from "../services/refund.service";
 import { z } from "zod";
 import { saveUploadedMedia } from "../services/uploaded-media.service";
+import { referralService } from "../services/referral.service";
 
 const uploadJobMediaSchema = z.object({
   dataUrl: z.string().min(1),
@@ -66,6 +67,7 @@ export const projectController = {
       }
 
       const project = await projectService.create({ ...result.data, clientId: req.user!.id });
+      await referralService.recordProjectCreated(project.id);
       return res.status(201).json(project);
     } catch (error) {
       console.error("Create project error:", error);

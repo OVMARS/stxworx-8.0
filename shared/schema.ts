@@ -83,6 +83,17 @@ export const BOUNTY_SUBMISSION_STATUSES = [
   "approved",
   "rejected",
 ] as const;
+export const REFERRAL_ATTRIBUTION_STATUSES = [
+  "pending",
+  "qualified",
+  "blocked",
+] as const;
+export const REFERRAL_PAYOUT_STATUSES = [
+  "pending",
+  "approved",
+  "paid",
+  "cancelled",
+] as const;
 
 export const uploadedMediaItemSchema = z.object({
   url: z.string().min(1).max(500),
@@ -479,6 +490,74 @@ export const platformSettings = mysqlTable("platform_settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const referralCodes = mysqlTable("referral_codes", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  ownerId: bigint("owner_id", { mode: "number", unsigned: true })
+    .references(() => users.id)
+    .notNull(),
+  code: varchar("code", { length: 32 }).unique().notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  lastSharedAt: timestamp("last_shared_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const referralAttributions = mysqlTable("referral_attributions", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  referralCodeId: bigint("referral_code_id", { mode: "number", unsigned: true })
+    .references(() => referralCodes.id)
+    .notNull(),
+  referrerId: bigint("referrer_id", { mode: "number", unsigned: true })
+    .references(() => users.id)
+    .notNull(),
+  referredUserId: bigint("referred_user_id", { mode: "number", unsigned: true })
+    .references(() => users.id)
+    .notNull(),
+  status: mysqlEnum("status", [...REFERRAL_ATTRIBUTION_STATUSES]).default("pending").notNull(),
+  firstSeenIp: varchar("first_seen_ip", { length: 64 }),
+  attributionIp: varchar("attribution_ip", { length: 64 }),
+  userAgent: varchar("user_agent", { length: 500 }),
+  firstProjectId: bigint("first_project_id", { mode: "number", unsigned: true }).references(() => projects.id),
+  firstEscrowProjectId: bigint("first_escrow_project_id", { mode: "number", unsigned: true }).references(() => projects.id),
+  firstCompletedProjectId: bigint("first_completed_project_id", { mode: "number", unsigned: true }).references(() => projects.id),
+  qualifiedProjectId: bigint("qualified_project_id", { mode: "number", unsigned: true }).references(() => projects.id),
+  totalCompletedJobs: int("total_completed_jobs", { unsigned: true }).default(0).notNull(),
+  cumulativeCompletedSpendUsd: decimal("cumulative_completed_spend_usd", { precision: 18, scale: 2 }).default("0.00").notNull(),
+  firstCompletedSpendUsd: decimal("first_completed_spend_usd", { precision: 18, scale: 2 }),
+  qualificationRule: varchar("qualification_rule", { length: 64 }),
+  blockedReason: varchar("blocked_reason", { length: 255 }),
+  firstSeenAt: timestamp("first_seen_at").defaultNow().notNull(),
+  attributedAt: timestamp("attributed_at").defaultNow().notNull(),
+  becameClientAt: timestamp("became_client_at"),
+  qualifiedAt: timestamp("qualified_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const referralPayouts = mysqlTable("referral_payouts", {
+  id: bigint("id", { mode: "number", unsigned: true }).autoincrement().primaryKey(),
+  attributionId: bigint("attribution_id", { mode: "number", unsigned: true })
+    .references(() => referralAttributions.id)
+    .notNull(),
+  referrerId: bigint("referrer_id", { mode: "number", unsigned: true })
+    .references(() => users.id)
+    .notNull(),
+  referredUserId: bigint("referred_user_id", { mode: "number", unsigned: true })
+    .references(() => users.id)
+    .notNull(),
+  projectId: bigint("project_id", { mode: "number", unsigned: true }).references(() => projects.id),
+  status: mysqlEnum("status", [...REFERRAL_PAYOUT_STATUSES]).default("pending").notNull(),
+  amountUsd: decimal("amount_usd", { precision: 18, scale: 2 }).notNull(),
+  eligibleSpendUsd: decimal("eligible_spend_usd", { precision: 18, scale: 2 }).notNull(),
+  payoutRate: decimal("payout_rate", { precision: 5, scale: 2 }).notNull(),
+  payoutCurrency: varchar("payout_currency", { length: 10 }).default("USD").notNull(),
+  approvedAt: timestamp("approved_at"),
+  paidAt: timestamp("paid_at"),
+  cancelledAt: timestamp("cancelled_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 // Zod Schemas
 
 export const insertUserSchema = createInsertSchema(users, {
@@ -596,6 +675,9 @@ export const insertPostCommentSchema = createInsertSchema(postComments, {
 }).omit({ id: true, createdAt: true });
 
 export const selectPostCommentSchema = createSelectSchema(postComments);
+export const selectReferralCodeSchema = createSelectSchema(referralCodes);
+export const selectReferralAttributionSchema = createSelectSchema(referralAttributions);
+export const selectReferralPayoutSchema = createSelectSchema(referralPayouts);
 
 // TypeScript Types
 export type User = typeof users.$inferSelect;
@@ -635,3 +717,6 @@ export type InsertUserConnectionRestriction = z.infer<typeof insertUserConnectio
 export type Bounty = typeof bounties.$inferSelect;
 export type BountySubmission = typeof bountySubmissions.$inferSelect;
 export type PlatformSetting = typeof platformSettings.$inferSelect;
+export type ReferralCode = typeof referralCodes.$inferSelect;
+export type ReferralAttribution = typeof referralAttributions.$inferSelect;
+export type ReferralPayout = typeof referralPayouts.$inferSelect;

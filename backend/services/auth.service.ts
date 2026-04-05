@@ -55,6 +55,7 @@ export const authService = {
     const normalizedStxAddress = stxAddress.trim().toUpperCase();
     const normalizedPublicKey = normalizeHexInput(publicKey);
     const normalizedSignature = normalizeHexInput(signature);
+    let isNewUser = false;
 
     // Verify the Stacks signed message
     const isValid = isValidWalletSignature(message, normalizedPublicKey, normalizedSignature);
@@ -81,6 +82,7 @@ export const authService = {
       user = existingUser;
     } else {
       // New user — create with chosen role
+      isNewUser = true;
       const result = await db
         .insert(users)
         .values({
@@ -100,7 +102,7 @@ export const authService = {
 
     const token = generateUserToken(tokenPayload);
 
-    return { user, token };
+    return { user, token, isNewUser };
   },
 
   async getUserById(id: number) {

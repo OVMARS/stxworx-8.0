@@ -20,6 +20,7 @@ const sidebarIconMap = {
   freelancers: Users,
   bounties: Trophy,
   leaderboard: Star,
+  referrals: Wallet,
   'ai-proposal': Sparkles,
   posts: Newspaper,
   messages: MessageCircle,
@@ -34,14 +35,14 @@ export const Sidebar = () => {
   const [showMobileMore, setShowMobileMore] = useState(false);
 
   const desktopMenuItems = platformMenuItems
-    .filter((item) => ['home', 'dashboard', 'jobs', 'freelancers', 'bounties', 'leaderboard', 'ai-proposal', 'posts', 'settings'].includes(item.id))
+    .filter((item) => ['home', 'dashboard', 'jobs', 'freelancers', 'bounties', 'leaderboard', 'referrals', 'ai-proposal', 'posts', 'settings'].includes(item.id))
     .map((item) => ({
       ...item,
       icon: sidebarIconMap[item.iconKey as keyof typeof sidebarIconMap],
     }));
 
   const mobileMenuItems = platformMenuItems
-    .filter((item) => ['home', 'dashboard', 'jobs', 'freelancers', 'bounties', 'leaderboard', 'ai-proposal', 'messages', 'notifications', 'profile', 'settings', 'posts'].includes(item.id))
+    .filter((item) => ['home', 'dashboard', 'jobs', 'freelancers', 'bounties', 'leaderboard', 'referrals', 'ai-proposal', 'messages', 'notifications', 'profile', 'settings', 'posts'].includes(item.id))
     .map((item) => ({
       ...item,
       icon: sidebarIconMap[item.iconKey as keyof typeof sidebarIconMap],

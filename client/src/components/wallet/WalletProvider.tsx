@@ -12,6 +12,36 @@ type WalletProviderProps = {
 
 const PENDING_ROLE_KEY = "stxworx_pending_role";
 const USER_ROLE_KEY = "stxworx_user_role";
+const PENDING_REFERRAL_CODE_KEY = "stxworx_pending_referral_code";
+
+function normalizeReferralCode(value?: string | null) {
+  return value?.trim().toUpperCase().replace(/[^A-Z0-9]/g, "") || "";
+}
+
+function persistReferralCodeFromLocation() {
+  const params = new URLSearchParams(window.location.search);
+  const referralCode = normalizeReferralCode(params.get('ref'));
+
+  if (!referralCode) {
+    return '';
+  }
+
+  window.localStorage.setItem(PENDING_REFERRAL_CODE_KEY, referralCode);
+  params.delete('ref');
+  const nextSearch = params.toString();
+  const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
+  window.history.replaceState({}, '', nextUrl);
+  return referralCode;
+}
+
+function getPendingReferralCode() {
+  const fromLocation = persistReferralCodeFromLocation();
+  if (fromLocation) {
+    return fromLocation;
+  }
+
+  return normalizeReferralCode(window.localStorage.getItem(PENDING_REFERRAL_CODE_KEY));
+}
 
 export function WalletProvider({ value, children }: WalletProviderProps) {
   const { setWalletAddress, setUserRole } = value;
@@ -33,12 +63,15 @@ export function WalletProvider({ value, children }: WalletProviderProps) {
         throw new Error("Wallet message signing was cancelled");
       }
 
+      const referralCode = getPendingReferralCode();
+
       const session = await verifyWallet({
         stxAddress: address,
         publicKey: signedMessage.publicKey,
         signature: signedMessage.signature,
         message,
         role,
+        referralCode: referralCode || undefined,
       });
 
       setUserRole(session.user.role);
@@ -46,6 +79,7 @@ export function WalletProvider({ value, children }: WalletProviderProps) {
       setIsSignedIn(true);
       setNeedsRoleSelection(false);
       window.localStorage.removeItem(PENDING_ROLE_KEY);
+      window.localStorage.removeItem(PENDING_REFERRAL_CODE_KEY);
     },
     [setUserRole],
   );
@@ -92,6 +126,8 @@ export function WalletProvider({ value, children }: WalletProviderProps) {
   );
 
   useEffect(() => {
+    persistReferralCodeFromLocation();
+
     const hydrateSession = async () => {
       if (userSession.isSignInPending()) {
         try {
