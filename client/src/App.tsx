@@ -83,6 +83,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { PostPage as SocialPostPage } from "./pages/PostPage";
 import { PostsPage } from "./pages/PostsPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 import { ProPlanPage } from "./pages/ProPlanPage";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { BountiesPage } from "./pages/BountyBoardPage";
@@ -531,6 +532,16 @@ export default function App() {
                       transition={{ duration: 0.4 }}
                     >
                       <SettingsPage />
+                    </motion.div>
+                  } />
+                  <Route path="/verify-email" element={
+                    <motion.div
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      transition={{ duration: 0.4 }}
+                    >
+                      <VerifyEmailPage />
                     </motion.div>
                   } />
                   <Route path="/admin" element={

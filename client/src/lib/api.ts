@@ -315,6 +315,9 @@ export interface ApiSettings {
   messagingOption: 'everyone' | 'clients_only' | 'connections_only';
   profileVisibility: 'public' | 'private';
   email?: string | null;
+  emailVerified: boolean;
+  emailVerificationSentAt?: string | null;
+  emailVerifiedAt?: string | null;
   twitterHandle?: string | null;
   isTwitterConnected: boolean;
   createdAt?: string;
@@ -1035,6 +1038,32 @@ export async function updateSettings(input: Partial<ApiSettings>) {
   return apiRequest<ApiSettings>('/settings/me', {
     method: 'PATCH',
     body: JSON.stringify(input),
+  });
+}
+
+export async function requestEmailVerification(email: string) {
+  return apiRequest<{ message: string }>('/settings/email-verification', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function resendEmailVerification() {
+  return apiRequest<{ message: string }>('/settings/email-verification/resend', {
+    method: 'POST',
+  });
+}
+
+export async function confirmEmailVerification(token: string) {
+  return apiRequest<{ message: string; email?: string }>('/settings/confirm-email', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+}
+
+export async function removeEmail() {
+  return apiRequest<{ message: string }>('/settings/email', {
+    method: 'DELETE',
   });
 }
 

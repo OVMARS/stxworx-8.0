@@ -1,6 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Link as LinkIcon, Mail, Shield, Twitter } from 'lucide-react';
-import { getSettings, updateSettings } from '../lib/api';
+import { Link as LinkIcon, Mail, Shield, Twitter, CheckCircle, Clock, X, Loader2 } from 'lucide-react';
+import {
+  getSettings,
+  updateSettings,
+  requestEmailVerification,
+  resendEmailVerification,
+  removeEmail,
+  type ApiSettings,
+} from '../lib/api';
 
 type SettingsSection = 'general' | 'notifications' | 'privacy' | 'connections';
 
@@ -17,11 +24,19 @@ export const SettingsPage = () => {
   const [messagingOption, setMessagingOption] = useState<'everyone' | 'clients_only' | 'connections_only'>('everyone');
   const [profileVisibility, setProfileVisibility] = useState<'public' | 'private'>('public');
   const [email, setEmail] = useState('');
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [emailVerificationSentAt, setEmailVerificationSentAt] = useState<string | null>(null);
   const [twitterHandle, setTwitterHandle] = useState('');
   const [isTwitterConnected, setIsTwitterConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
+
+  // Email verification states
+  const [emailInput, setEmailInput] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -33,6 +48,9 @@ export const SettingsPage = () => {
         setMessagingOption(settings.messagingOption);
         setProfileVisibility(settings.profileVisibility);
         setEmail(settings.email || '');
+        setEmailInput(settings.email || '');
+        setEmailVerified(settings.emailVerified);
+        setEmailVerificationSentAt(settings.emailVerificationSentAt || null);
         setTwitterHandle(settings.twitterHandle || '');
         setIsTwitterConnected(settings.isTwitterConnected);
       } catch (error) {
@@ -44,6 +62,17 @@ export const SettingsPage = () => {
 
     loadSettings();
   }, []);
+
+  // Clear email messages after 5 seconds
+  useEffect(() => {
+    if (emailError || emailSuccess) {
+      const timer = setTimeout(() => {
+        setEmailError(null);
+        setEmailSuccess(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [emailError, emailSuccess]);
 
   const handleTwitterConnect = () => {
     if (!isTwitterConnected) {
@@ -58,15 +87,84 @@ export const SettingsPage = () => {
     setTwitterHandle('');
   };
 
+  const handleRequestVerification = async () => {
+    if (!emailInput || !emailInput.includes('@')) {
+      setEmailError('Please enter a valid email address');
+      return;
+    }
+
+    setIsVerifying(true);
+    setEmailError(null);
+    setEmailSuccess(null);
+
+    try {
+      const response = await requestEmailVerification(emailInput);
+      setEmailSuccess(response.message);
+      setEmail(emailInput);
+      setEmailVerified(false);
+      setEmailVerificationSentAt(new Date().toISOString());
+    } catch (error: any) {
+      setEmailError(error.message || 'Failed to send verification email');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setIsVerifying(true);
+    setEmailError(null);
+    setEmailSuccess(null);
+
+    try {
+      const response = await resendEmailVerification();
+      setEmailSuccess(response.message);
+      setEmailVerificationSentAt(new Date().toISOString());
+    } catch (error: any) {
+      setEmailError(error.message || 'Failed to resend verification email');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleRemoveEmail = async () => {
+    setIsVerifying(true);
+    setEmailError(null);
+    setEmailSuccess(null);
+
+    try {
+      const response = await removeEmail();
+      setEmailSuccess(response.message);
+      setEmail('');
+      setEmailInput('');
+      setEmailVerified(false);
+      setEmailVerificationSentAt(null);
+      // Disable email notifications when email is removed
+      if (emailNotifications) {
+        setEmailNotifications(false);
+        await updateSettings({ emailNotifications: false });
+      }
+    } catch (error: any) {
+      setEmailError(error.message || 'Failed to remove email');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Prevent enabling email notifications without verified email
+      const newEmailNotifications = emailNotifications && !emailVerified ? false : emailNotifications;
+      if (emailNotifications && !emailVerified) {
+        setEmailNotifications(false);
+      }
+
       const updated = await updateSettings({
         notificationsEnabled,
-        emailNotifications,
+        emailNotifications: newEmailNotifications,
         messagingOption,
         profileVisibility,
-        email,
+        // Note: email is not included here - it's handled via verification flow
         twitterHandle,
         isTwitterConnected,
       });
@@ -75,7 +173,6 @@ export const SettingsPage = () => {
       setEmailNotifications(updated.emailNotifications);
       setMessagingOption(updated.messagingOption);
       setProfileVisibility(updated.profileVisibility);
-      setEmail(updated.email || '');
       setTwitterHandle(updated.twitterHandle || '');
       setIsTwitterConnected(updated.isTwitterConnected);
     } catch (error) {
@@ -146,19 +243,118 @@ export const SettingsPage = () => {
             <section id="settings-general" className="card p-6 space-y-6 scroll-mt-36">
               <h2 className="text-xl font-black mb-4">General</h2>
 
-              <div className="space-y-2">
-                <label className="block text-xs font-bold uppercase tracking-widest text-muted">Email Binding</label>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter email for notifications"
-                    className="flex-1 bg-ink/5 border border-border rounded-[15px] px-4 py-3 text-sm focus:ring-1 focus:ring-accent-orange outline-none"
-                  />
-                  <button className="btn-primary w-full sm:w-auto px-6 py-3 shrink-0">Bind</button>
+              {/* Email Verification Section */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold uppercase tracking-widest text-muted">Email Binding</label>
+                  {emailVerified && (
+                    <span className="flex items-center gap-1 text-xs text-green-600 font-bold">
+                      <CheckCircle size={14} />
+                      Verified
+                    </span>
+                  )}
+                  {email && !emailVerified && (
+                    <span className="flex items-center gap-1 text-xs text-amber-600 font-bold">
+                      <Clock size={14} />
+                      Pending Verification
+                    </span>
+                  )}
                 </div>
-                <p className="text-xs text-muted">Used for important account notifications and updates.</p>
+
+                {/* Error/Success Messages */}
+                {emailError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-[10px] text-sm text-red-600">
+                    {emailError}
+                  </div>
+                )}
+                {emailSuccess && (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-[10px] text-sm text-green-600">
+                    {emailSuccess}
+                  </div>
+                )}
+
+                {/* Verified Email Display */}
+                {emailVerified ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-4 border border-border rounded-[15px] bg-bg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-100 text-green-600 rounded-full flex items-center justify-center">
+                          <Mail size={20} />
+                        </div>
+                        <div>
+                          <p className="font-bold">{email}</p>
+                          <p className="text-xs text-muted">Verified email address</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setEmailVerified(false);
+                            setEmailInput(email);
+                          }}
+                          className="px-4 py-2 rounded-[15px] text-xs font-bold bg-ink/5 text-ink hover:bg-ink/10 transition-colors"
+                        >
+                          Change
+                        </button>
+                        <button
+                          onClick={handleRemoveEmail}
+                          disabled={isVerifying}
+                          className="px-4 py-2 rounded-[15px] text-xs font-bold bg-red-50 text-red-500 hover:bg-red-100 transition-colors disabled:opacity-50"
+                        >
+                          {isVerifying ? 'Removing...' : 'Remove'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* Unverified/Pending Email Input */
+                  <div className="space-y-3">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="email"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        placeholder="Enter email for notifications"
+                        disabled={isVerifying}
+                        className="flex-1 bg-ink/5 border border-border rounded-[15px] px-4 py-3 text-sm focus:ring-1 focus:ring-accent-orange outline-none disabled:opacity-50"
+                      />
+                      <button
+                        onClick={emailVerificationSentAt ? handleResendVerification : handleRequestVerification}
+                        disabled={isVerifying || !emailInput}
+                        className="btn-primary w-full sm:w-auto px-6 py-3 shrink-0 disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {isVerifying ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Sending...
+                          </>
+                        ) : emailVerificationSentAt ? (
+                          'Resend'
+                        ) : (
+                          'Send Verification'
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Pending State Info */}
+                    {emailVerificationSentAt && !emailVerified && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-[10px] text-sm">
+                        <p className="text-amber-700">
+                          Verification email sent to <strong>{email}</strong>. Click the link in the email to verify.
+                        </p>
+                        <p className="text-xs text-amber-600 mt-1">
+                          Didn&apos;t receive it? Check your spam folder or click Resend above.
+                        </p>
+                      </div>
+                    )}
+
+                    <p className="text-xs text-muted">
+                      {emailNotifications && !emailVerified
+                        ? 'Email notifications are disabled until you verify your email address.'
+                        : 'Used for important account notifications and updates.'}
+                    </p>
+                  </div>
+                )}
               </div>
             </section>
             
@@ -218,19 +414,24 @@ export const SettingsPage = () => {
                   />
                 </label>
 
-                <label className="flex items-center justify-between cursor-pointer group p-2 hover:bg-ink/5 rounded-[15px] transition-colors -mx-2">
+                <label className={`flex items-center justify-between cursor-pointer group p-2 rounded-[15px] transition-colors -mx-2 ${emailVerified ? 'hover:bg-ink/5' : 'opacity-60 cursor-not-allowed'}`}>
                   <div>
                     <span className="font-bold block">Email Notifications</span>
-                    <span className="text-xs text-muted">Receive daily summaries and alerts</span>
+                    <span className="text-xs text-muted">
+                      {emailVerified
+                        ? 'Receive daily summaries and alerts'
+                        : 'Verify your email to enable notifications'}
+                    </span>
                   </div>
-                  <div className={`w-12 h-6 rounded-full transition-colors relative ${emailNotifications ? 'bg-accent-cyan' : 'bg-ink/20'}`}>
-                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${emailNotifications ? 'left-7' : 'left-1'}`} />
+                  <div className={`w-12 h-6 rounded-full transition-colors relative ${emailNotifications && emailVerified ? 'bg-accent-cyan' : 'bg-ink/20'}`}>
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${emailNotifications && emailVerified ? 'left-7' : 'left-1'}`} />
                   </div>
-                  <input 
-                    type="checkbox" 
-                    className="hidden" 
+                  <input
+                    type="checkbox"
+                    className="hidden"
                     checked={emailNotifications}
-                    onChange={(e) => setEmailNotifications(e.target.checked)}
+                    disabled={!emailVerified}
+                    onChange={(e) => emailVerified && setEmailNotifications(e.target.checked)}
                   />
                 </label>
               </div>
@@ -293,9 +494,28 @@ export const SettingsPage = () => {
 
             <div className="flex justify-end gap-4 pt-4">
               <button
-                onClick={() => {
-                  setEmail('');
-                  setTwitterHandle('');
+                onClick={async () => {
+                  // Reload settings from server to reset all state
+                  setLoading(true);
+                  try {
+                    const settings = await getSettings();
+                    setNotificationsEnabled(settings.notificationsEnabled);
+                    setEmailNotifications(settings.emailNotifications);
+                    setMessagingOption(settings.messagingOption);
+                    setProfileVisibility(settings.profileVisibility);
+                    setEmail(settings.email || '');
+                    setEmailInput(settings.email || '');
+                    setEmailVerified(settings.emailVerified);
+                    setEmailVerificationSentAt(settings.emailVerificationSentAt || null);
+                    setTwitterHandle(settings.twitterHandle || '');
+                    setIsTwitterConnected(settings.isTwitterConnected);
+                    setEmailError(null);
+                    setEmailSuccess(null);
+                  } catch (error) {
+                    console.error('Failed to reload settings:', error);
+                  } finally {
+                    setLoading(false);
+                  }
                 }}
                 className="px-6 py-3 rounded-[15px] font-bold text-muted hover:text-ink transition-colors"
               >
