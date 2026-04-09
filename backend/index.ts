@@ -26,6 +26,7 @@ import { socialRoutes } from "./routes/social.routes";
 import { nftRoutes } from "./routes/nft.routes";
 import { refundRoutes } from "./routes/refund.routes";
 import { referralRoutes } from "./routes/referral.routes";
+import contactRoutes from "./routes/contact.routes";
 
 const app = express();
 
@@ -114,6 +115,7 @@ app.use("/api/social", socialRoutes);
 app.use("/api/nfts", nftRoutes);
 app.use("/api/refunds", refundRoutes);
 app.use("/api/referrals", referralRoutes);
+app.use("/api/contact", contactRoutes);
 
 // Error handler
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

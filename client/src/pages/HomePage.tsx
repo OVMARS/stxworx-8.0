@@ -63,6 +63,16 @@ export const HomePage = () => {
 
   const canInteract = isSignedIn && Boolean(walletAddress);
 
+  const featuredRoles = ['Ambassador', 'Influencer', 'Top Freelancer', 'Collaborator', 'Promoter'];
+  const [currentRoleIndex, setCurrentRoleIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentRoleIndex((prev) => (prev + 1) % featuredRoles.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   const loadCommentsForPost = useCallback(async (postId: number) => {
     setLoadingComments((current) => ({
       ...current,
@@ -360,29 +370,28 @@ export const HomePage = () => {
                 </div>
               </div>
             </motion.div>
-        {/* Friends Section */}
+        {/* Get Featured Section */}
         <section className="mb-4">
           <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-black">Our Friends</h2>
+            <h2 className="text-2xl font-black">Get Featured as:</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Circle USDC */}
-            <div className="card p-6 flex items-center gap-6 hover:border-accent-blue transition-all">
-              <div className="w-16 h-16 rounded-full bg-[#2775CA] flex items-center justify-center shrink-0">
-                <span className="text-white text-2xl font-black">$</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="text-lg font-black mb-1">Circle USDC</h3>
-                <p className="text-sm text-muted">Digital dollar stablecoin powering global payments</p>
-              </div>
-              <a 
-                href="https://www.circle.com/en/usdc" 
-                target="_blank" 
-                rel="noreferrer"
-                className="text-accent-blue text-sm font-bold flex items-center gap-2 hover:underline"
-              >
-                Learn more <ArrowRight size={16} />
-              </a>
+          <div
+            className="card p-6 overflow-hidden cursor-pointer hover:border-accent-orange transition-all"
+            onClick={() => navigate('/contact')}
+          >
+            <div className="relative h-12 flex items-center justify-center">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={currentRoleIndex}
+                  initial={{ x: 100, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: -100, opacity: 0 }}
+                  transition={{ duration: 0.5, ease: 'easeInOut' }}
+                  className="absolute text-xl sm:text-2xl font-black text-accent-orange whitespace-nowrap"
+                >
+                  {featuredRoles[currentRoleIndex]}
+                </motion.div>
+              </AnimatePresence>
             </div>
           </div>
         </section>  

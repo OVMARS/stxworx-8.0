@@ -1351,3 +1351,21 @@ export async function logoutUser() {
     method: 'POST',
   });
 }
+
+export interface ContactFormInput {
+  name: string;
+  email: string;
+  message: string;
+}
+
+export interface ContactFormResponse {
+  success: boolean;
+  message: string;
+}
+
+export async function submitContactForm(input: ContactFormInput) {
+  return apiRequest<ContactFormResponse>('/contact', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}

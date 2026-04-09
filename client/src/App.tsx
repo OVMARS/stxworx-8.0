@@ -69,7 +69,7 @@ import {
   ZoomOut
 } from 'lucide-react';
 
-import { generateAiText } from './lib/api';
+import { generateAiText, submitContactForm } from './lib/api';
 import { createContext, useContext } from 'react';
 import * as Shared from "./shared";
 import { WalletProvider } from "./components/wallet/WalletProvider";
@@ -277,32 +277,91 @@ const TermsPage = () => (
   </div>
 );
 
-const ContactPage = () => (
-  <div className="pt-28 pb-20 px-6 md:pl-[92px]">
-    <div className="container-custom">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-        <h1 className="text-3xl sm:text-5xl font-black tracking-tighter mb-8">Contact Us</h1>
-        <div className="card max-w-2xl">
-          <form className="space-y-6">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-muted mb-2">Name</label>
-              <input type="text" className="w-full bg-ink/5 border border-border rounded-[15px] p-4 text-sm focus:ring-1 focus:ring-accent-orange outline-none" placeholder="Your name" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-muted mb-2">Email</label>
-              <input type="email" className="w-full bg-ink/5 border border-border rounded-[15px] p-4 text-sm focus:ring-1 focus:ring-accent-orange outline-none" placeholder="your@email.com" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-widest text-muted mb-2">Message</label>
-              <textarea className="w-full bg-ink/5 border border-border rounded-[15px] p-4 text-sm focus:ring-1 focus:ring-accent-orange outline-none min-h-[150px]" placeholder="How can we help?"></textarea>
-            </div>
-            <button type="button" className="btn-primary w-full py-4 justify-center">Send Message</button>
-          </form>
-        </div>
-      </motion.div>
+const ContactPage = () => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitStatus(null);
+
+    try {
+      await submitContactForm({ name: name.trim(), email: email.trim(), message: message.trim() });
+      setSubmitStatus({ type: 'success', message: 'Message sent successfully! We will get back to you soon.' });
+      setName('');
+      setEmail('');
+      setMessage('');
+    } catch (error) {
+      setSubmitStatus({ type: 'error', message: 'Failed to send message. Please try again later.' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="pt-28 pb-20 px-6 md:pl-[92px]">
+      <div className="container-custom">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+          <h1 className="text-3xl sm:text-5xl font-black tracking-tighter mb-8">Contact Us</h1>
+          <div className="card max-w-2xl">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-muted mb-2">Name</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="w-full bg-ink/5 border border-border rounded-[15px] p-4 text-sm focus:ring-1 focus:ring-accent-orange outline-none"
+                  placeholder="Your name"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-muted mb-2">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full bg-ink/5 border border-border rounded-[15px] p-4 text-sm focus:ring-1 focus:ring-accent-orange outline-none"
+                  placeholder="your@email.com"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-widest text-muted mb-2">Message</label>
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  required
+                  minLength={10}
+                  maxLength={5000}
+                  className="w-full bg-ink/5 border border-border rounded-[15px] p-4 text-sm focus:ring-1 focus:ring-accent-orange outline-none min-h-[150px]"
+                  placeholder="How can we help?"
+                />
+              </div>
+              {submitStatus && (
+                <div className={`p-4 rounded-[15px] text-sm font-bold ${submitStatus.type === 'success' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                  {submitStatus.message}
+                </div>
+              )}
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="btn-primary w-full py-4 justify-center disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? 'Sending...' : 'Send Message'}
+              </button>
+            </form>
+          </div>
+        </motion.div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // --- Main App ---
 
