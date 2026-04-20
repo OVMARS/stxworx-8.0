@@ -740,7 +740,7 @@ export default function App() {
                       <DiscordIcon className="h-5 w-5" />
                     </a>
                     <a
-                      href="https://x.com/stxworx"
+                      href="https://x.com/stx_worx"
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label="X"
