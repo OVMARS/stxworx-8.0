@@ -1,6 +1,6 @@
 # STXWORX
 
-STXWORX is a Stacks-based freelance marketplace with on-chain escrow, milestone releases, admin moderation, social identity, and reputation features. The current product flow is: create a project, receive proposals, fund escrow on-chain, verify the escrow transaction, activate the project, and then manage milestone delivery and releases.
+STXWORX is a Stacks-based freelance marketplace with on-chain escrow, milestone releases, admin moderation, social identity, and reputation features. The current product flow is: create a project, receive proposals, fund escrow on-chain, verify the escrow transaction, activate the project, and then manage milestone delivery and releases. All Rights Reserved By WHITE - FINTECH 
 
 ## 🚀 Quick Start
 
