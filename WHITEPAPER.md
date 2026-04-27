@@ -1,13 +1,9 @@
-![][./client/public/SWbanner.png]
+# **STXWORX: Unlocking Creative Work on Bitcoin via Stacks**
 
-![][./client/public/SWlogo.png]![][./client/public/WhiteLogo.png]
+## **A Decentralized Freelance Marketplace Powered by STX, sBTC & USDCx**
 
-**STXWORX: Unlocking Creative Work on Bitcoin via Stacks**
-
-**A Decentralized Freelance Marketplace Powered by STX, sBTC & USDCx**
-
-**Version 1.7 – April 2026**  
-**Developed by White Fintech**
+### Version 1.7 – April 2026  
+### Developed by White Fintech
 
 **Live at: [https://stxworx.com](https://stxworx.com)**
 
