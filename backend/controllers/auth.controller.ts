@@ -25,6 +25,8 @@ export const authController = {
       const { referralCode, ...walletPayload } = result.data;
       const { user, token, isNewUser } = await authService.verifyWalletAndLogin(walletPayload);
 
+      console.log('[REFERRAL DEBUG] API received referralCode:', referralCode, '| userRole:', user.role, '| isNewUser:', isNewUser, '| userId:', user.id);
+
       await referralService.attributeClientReferral({
         referralCode,
         userId: user.id,

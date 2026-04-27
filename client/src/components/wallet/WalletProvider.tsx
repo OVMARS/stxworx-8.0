@@ -64,6 +64,7 @@ export function WalletProvider({ value, children }: WalletProviderProps) {
       }
 
       const referralCode = getPendingReferralCode();
+      console.log('[REFERRAL DEBUG] Frontend sending referralCode:', referralCode);
 
       const session = await verifyWallet({
         stxAddress: address,

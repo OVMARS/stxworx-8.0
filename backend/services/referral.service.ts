@@ -128,7 +128,18 @@ export const referralService = {
     userAgent?: string | null;
   }) {
     const normalizedCode = normalizeReferralCode(input.referralCode || "");
-    if (!normalizedCode || input.userRole !== "client" || !input.isNewUser) {
+    console.log('[REFERRAL DEBUG] Service - normalizedCode:', normalizedCode, '| userRole:', input.userRole, '| isNewUser:', input.isNewUser);
+    
+    if (!normalizedCode) {
+      console.log('[REFERRAL DEBUG] SKIPPED: No referral code provided');
+      return null;
+    }
+    if (input.userRole !== "client") {
+      console.log('[REFERRAL DEBUG] SKIPPED: User role is', input.userRole, '- only client signups trigger attribution');
+      return null;
+    }
+    if (!input.isNewUser) {
+      console.log('[REFERRAL DEBUG] SKIPPED: User is not new (isNewUser:', input.isNewUser, ')');
       return null;
     }
 
@@ -138,7 +149,12 @@ export const referralService = {
       .where(and(eq(referralCodes.code, normalizedCode), eq(referralCodes.isActive, true)))
       .limit(1);
 
-    if (!code || code.ownerId === input.userId) {
+    if (!code) {
+      console.log('[REFERRAL DEBUG] SKIPPED: Invalid or inactive referral code:', normalizedCode);
+      return null;
+    }
+    if (code.ownerId === input.userId) {
+      console.log('[REFERRAL DEBUG] SKIPPED: Self-referral blocked (ownerId:', code.ownerId, '=== userId:', input.userId, ')');
       return null;
     }
 
@@ -148,15 +164,27 @@ export const referralService = {
       .where(eq(users.id, code.ownerId))
       .limit(1);
 
-    if (!referrer || !referrer.isActive || referrer.stxAddress === input.stxAddress) {
+    if (!referrer) {
+      console.log('[REFERRAL DEBUG] SKIPPED: Referrer not found for code owner:', code.ownerId);
+      return null;
+    }
+    if (!referrer.isActive) {
+      console.log('[REFERRAL DEBUG] SKIPPED: Referrer is inactive (ownerId:', code.ownerId, ')');
+      return null;
+    }
+    if (referrer.stxAddress === input.stxAddress) {
+      console.log('[REFERRAL DEBUG] SKIPPED: Referrer wallet matches referred wallet');
       return null;
     }
 
     const existing = await getAttributionByReferredUserId(input.userId);
     if (existing) {
+      console.log('[REFERRAL DEBUG] SKIPPED: User already has existing attribution (id:', existing.id, ')');
       return existing;
     }
 
+    console.log('[REFERRAL DEBUG] SUCCESS: Creating attribution for user', input.userId, 'via code', normalizedCode, 'from referrer', code.ownerId);
+    
     const [result] = await db.insert(referralAttributions).values({
       referralCodeId: code.id,
       referrerId: code.ownerId,
@@ -169,6 +197,7 @@ export const referralService = {
     });
 
     const [created] = await db.select().from(referralAttributions).where(eq(referralAttributions.id, result.insertId));
+    console.log('[REFERRAL DEBUG] SUCCESS: Attribution created with id:', created?.id);
     return created || null;
   },
 
