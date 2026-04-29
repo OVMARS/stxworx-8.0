@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import * as Shared from "../../shared";
 import { getCurrentUser, getUserProfile, logoutUser, verifyWallet } from "../../lib/api";
+import {
+  clearPendingReferralCode,
+  getPendingReferralCode,
+  getStoredPendingReferralCode,
+  persistReferralCodeFromLocation,
+} from "../../lib/referral";
 import { authenticate, userSession, getUserData, getUserAddress, requestSignMessage } from "../../lib/stacks";
 import { IS_TESTNET } from "../../lib/constants";
 import type { UserRole } from "../../types/user";
@@ -12,36 +18,6 @@ type WalletProviderProps = {
 
 const PENDING_ROLE_KEY = "stxworx_pending_role";
 const USER_ROLE_KEY = "stxworx_user_role";
-const PENDING_REFERRAL_CODE_KEY = "stxworx_pending_referral_code";
-
-function normalizeReferralCode(value?: string | null) {
-  return value?.trim().toUpperCase().replace(/[^A-Z0-9]/g, "") || "";
-}
-
-function persistReferralCodeFromLocation() {
-  const params = new URLSearchParams(window.location.search);
-  const referralCode = normalizeReferralCode(params.get('ref'));
-
-  if (!referralCode) {
-    return '';
-  }
-
-  window.localStorage.setItem(PENDING_REFERRAL_CODE_KEY, referralCode);
-  params.delete('ref');
-  const nextSearch = params.toString();
-  const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
-  window.history.replaceState({}, '', nextUrl);
-  return referralCode;
-}
-
-function getPendingReferralCode() {
-  const fromLocation = persistReferralCodeFromLocation();
-  if (fromLocation) {
-    return fromLocation;
-  }
-
-  return normalizeReferralCode(window.localStorage.getItem(PENDING_REFERRAL_CODE_KEY));
-}
 
 export function WalletProvider({ value, children }: WalletProviderProps) {
   const { setWalletAddress, setUserRole } = value;
@@ -63,8 +39,8 @@ export function WalletProvider({ value, children }: WalletProviderProps) {
         throw new Error("Wallet message signing was cancelled");
       }
 
-      const referralCode = getPendingReferralCode();
-      console.log('[REFERRAL DEBUG] Frontend sending referralCode:', referralCode);
+      const referralCode = getPendingReferralCode('WalletProvider establishBackendSession');
+      console.log('[REFERRAL DEBUG] Frontend sending referralCode before verify-wallet:', referralCode);
 
       const session = await verifyWallet({
         stxAddress: address,
@@ -80,7 +56,7 @@ export function WalletProvider({ value, children }: WalletProviderProps) {
       setIsSignedIn(true);
       setNeedsRoleSelection(false);
       window.localStorage.removeItem(PENDING_ROLE_KEY);
-      window.localStorage.removeItem(PENDING_REFERRAL_CODE_KEY);
+      clearPendingReferralCode('WalletProvider establishBackendSession success');
     },
     [setUserRole],
   );
@@ -100,6 +76,10 @@ export function WalletProvider({ value, children }: WalletProviderProps) {
         setIsSignedIn(true);
         setNeedsRoleSelection(false);
         window.localStorage.removeItem(PENDING_ROLE_KEY);
+        console.log(
+          '[REFERRAL DEBUG] Existing backend session detected. Skipping verify-wallet. Stored referral code remains:',
+          getStoredPendingReferralCode('WalletProvider authenticateBackendSession existing-session'),
+        );
         return;
       } catch {}
 
@@ -127,16 +107,25 @@ export function WalletProvider({ value, children }: WalletProviderProps) {
   );
 
   useEffect(() => {
-    persistReferralCodeFromLocation();
+    persistReferralCodeFromLocation('WalletProvider mount');
 
     const hydrateSession = async () => {
+      console.log('[REFERRAL DEBUG] WalletProvider hydrate start href:', window.location.href);
+      console.log('[REFERRAL DEBUG] WalletProvider hydrate start search:', window.location.search);
+      console.log(
+        '[REFERRAL DEBUG] WalletProvider hydrate stored referral before auth init:',
+        getStoredPendingReferralCode('WalletProvider hydrate'),
+      );
+
       if (userSession.isSignInPending()) {
+        console.log('[REFERRAL DEBUG] WalletProvider detected pending wallet sign-in. Current URL before handlePendingSignIn:', window.location.href);
         try {
           const data = await userSession.handlePendingSignIn();
           setUserData(data);
           const address =
             getUserAddress() || (IS_TESTNET ? data.profile?.stxAddress?.testnet : data.profile?.stxAddress?.mainnet) || null;
           setWalletAddress(address);
+          console.log('[REFERRAL DEBUG] WalletProvider URL after handlePendingSignIn:', window.location.href);
           await authenticateBackendSession();
         } catch (error) {
           console.error("Error handling pending sign in:", error);
@@ -146,6 +135,7 @@ export function WalletProvider({ value, children }: WalletProviderProps) {
       }
 
       if (userSession.isUserSignedIn()) {
+        console.log('[REFERRAL DEBUG] WalletProvider found existing wallet session. Current URL before backend auth:', window.location.href);
         try {
           const data = getUserData();
           setUserData(data);
@@ -167,6 +157,12 @@ export function WalletProvider({ value, children }: WalletProviderProps) {
     if (role) {
       window.localStorage.setItem(PENDING_ROLE_KEY, role);
     }
+
+    console.log('[REFERRAL DEBUG] Starting wallet connect. Current URL:', window.location.href);
+    console.log(
+      '[REFERRAL DEBUG] Starting wallet connect. Stored referral code before wallet auth redirect:',
+      getStoredPendingReferralCode('WalletProvider connect'),
+    );
 
     authenticate(() => {
       if (userSession.isUserSignedIn()) {

@@ -366,6 +366,25 @@ const ContactPage = () => {
 
 // --- Main App ---
 
+const NavigationDebugLogger = () => {
+  const location = useLocation();
+  const previousUrlRef = React.useRef<string | null>(null);
+
+  useEffect(() => {
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+    if (previousUrlRef.current === null) {
+      console.log('[REFERRAL DEBUG] Router initial location:', currentUrl);
+    } else if (previousUrlRef.current !== currentUrl) {
+      console.log('[REFERRAL DEBUG] Router navigation from:', previousUrlRef.current, '| to:', currentUrl);
+    }
+
+    previousUrlRef.current = currentUrl;
+  }, [location.hash, location.pathname, location.search]);
+
+  return null;
+};
+
 export default function App() {
   const [loading, setLoading] = useState(true);
   const [theme, setTheme] = useState<'dark' | 'light'>(getInitialTheme);
@@ -424,6 +443,7 @@ export default function App() {
       }}
     >
       <Router>
+        <NavigationDebugLogger />
         <Shared.CustomCursor />
         <div className="min-h-screen pt-12 bg-bg text-ink selection:bg-accent-orange selection:text-bg overflow-x-hidden pb-16 md:pb-0">
           <TopHeader theme={theme} toggleTheme={() => setTheme(theme === 'dark' ? 'light' : 'dark')} />
